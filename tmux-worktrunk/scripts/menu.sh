@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+S="$(cd "$(dirname "$0")" && pwd)"
+tmux display-menu -T "#[align=centre] worktrunk " \
+  "new worktree"            n "display-popup -d '#{pane_current_path}' -E '$S/new.sh'" \
+  "new worktree + agent"    a "display-popup -d '#{pane_current_path}' -E '$S/new.sh agent'" \
+  "open / switch"           o "display-popup -d '#{pane_current_path}' -E '$S/switch.sh'" \
+  "open PR"                 p "display-popup -d '#{pane_current_path}' -E '$S/pr.sh'" \
+  "" \
+  "worktree as window"      w "display-popup -d '#{pane_current_path}' -E '$S/window.sh'" \
+  "rebuild layout"          l "run-shell '$S/layout.sh'" \
+  "promote window->session" r "run-shell '$S/promote.sh'" \
+  "" \
+  "jump -> edit"            e "select-window -t :edit" \
+  "jump -> agent"           j "select-window -t :agent" \
+  "jump -> serve"           s "select-window -t :serve" \
+  "" \
+  "list worktrees"          L "display-popup -d '#{pane_current_path}' -E '$S/list.sh'" \
+  "setup notifications"     N "display-popup -d '#{pane_current_path}' -E '$S/install-notify.sh'" \
+  "clear agent markers"     c "run-shell '$S/clear-markers.sh'" \
+  "" \
+  "remove current"          x "confirm-before -p 'remove this worktree? (y/n) ' \"run-shell '$S/remove.sh'\"" \
+  "prune merged"            X "confirm-before -p 'prune merged worktrees? (y/n) ' \"display-popup -d '#{pane_current_path}' -E '$S/prune.sh'\""
