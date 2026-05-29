@@ -7,12 +7,7 @@ tmux display-menu -T "#[align=centre] bonsai " \
   "open PR"                 p "display-popup -d '#{pane_current_path}' -E '$S/pr.sh'" \
   "" \
   "worktree as window"      w "display-popup -d '#{pane_current_path}' -E '$S/window.sh'" \
-  "rebuild layout"          l "run-shell '$S/layout.sh'" \
   "promote window->session" r "run-shell '$S/promote.sh'" \
-  "" \
-  "jump -> edit"            e "select-window -t :edit" \
-  "jump -> agent"           j "select-window -t :agent" \
-  "jump -> serve"           s "select-window -t :serve" \
   "" \
   "list worktrees"          L "display-popup -d '#{pane_current_path}' -E '$S/list.sh'" \
   "setup notifications"     N "display-popup -d '#{pane_current_path}' -E '$S/install-notify.sh'" \

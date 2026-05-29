@@ -26,7 +26,6 @@ else
     echo "# tmux-bonsai"
     echo "set -g @bonsai-key     'W'"
     echo "set -g @bonsai-agent   'claude'"
-    echo "set -g @bonsai-windows 'edit agent serve git'"
     echo "set -g @bonsai-notify  'on'"
     echo "run-shell '$DEST/bonsai.tmux'"
   } >> "$TMUX_CONF"

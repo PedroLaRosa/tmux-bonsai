@@ -3,17 +3,20 @@
 > Cultivate parallel git worktrees and AI agents across branches — without leaving tmux.
 
 **tmux-bonsai** turns your tmux server into a workbench for a git **worktree-per-task**
-workflow. Spin up an isolated worktree for any branch, drop it into its own tmux session
-with a ready-made window layout, and launch an AI coding agent (Claude Code, opencode, …)
-right where the work lives — then get pinged the moment any agent in any session finishes
-or needs input. Jump between tasks with a single `fzf` picker, promote a scratch window
-into its own session, and prune merged worktrees when you're done. Like tending a bonsai:
-many small branches, each shaped deliberately, all in view at once.
+workflow. Spin up an isolated worktree for any branch, drop it into its own tmux session,
+and launch an AI coding agent (Claude Code, opencode, …) right where the work lives — then
+get pinged the moment any agent in any session finishes or needs input. Jump between tasks
+with a single `fzf` picker, promote a scratch window into its own session, and prune merged
+worktrees when you're done. Like tending a bonsai: many small branches, each shaped
+deliberately, all in view at once.
+
+Bring your own layout: bonsai never enforces one — shape each session with a separate
+plugin (tmuxinator, smug) or a tmux `session-created` hook (see [Layout](#layout)).
 
 [worktrunk](https://worktrunk.dev) (`wt`) is the git engine; the plugin owns all the
 tmux orchestration. **No worktrunk config / hooks required** — every `wt` call is made
-with `--no-hooks --no-cd`, and the plugin creates the sessions, builds the window
-layout, switches the client, and tears things down itself.
+with `--no-hooks --no-cd`, and the plugin creates the session, switches the client, and
+tears things down itself.
 
 ## Requirements
 
@@ -47,14 +50,12 @@ run-shell '~/code/tmux-bonsai/bonsai.tmux'
 
 | Key | Action |
 |-----|--------|
-| n | New worktree → own session with the window layout |
-| a | New worktree + launch the agent in the `agent` window |
+| n | New worktree → its own session |
+| a | New worktree + launch the agent in that session |
 | o | Open / switch — fzf over worktrees **and** local/remote branches (with log preview) |
 | p | Open a teammate's PR by number |
 | w | New worktree as a **window** in the current session |
-| l | Rebuild the layout in this session |
 | r | Promote the current window-worktree into its own session |
-| e/j/s | Jump to the edit / agent / serve window |
 | L | List all worktrees (`wt list --full`) |
 | N | Set up agent notifications (writes the Claude Code + opencode hooks) |
 | c | Clear all agent markers |
@@ -69,13 +70,24 @@ session).
 ## Options
 
 ```tmux
-set -g @bonsai-key     'W'                  # menu key (under prefix)
-set -g @bonsai-agent   'claude'             # 'opencode', 'opencode run', ...
-set -g @bonsai-windows 'edit agent serve git'  # layout; first window is focused
-set -g @bonsai-notify  'on'                     # agent markers + focus-clear
+set -g @bonsai-key    'W'        # menu key (under prefix)
+set -g @bonsai-agent  'claude'   # 'opencode', 'opencode run', ...
+set -g @bonsai-notify 'on'       # agent markers + focus-clear
 ```
 
-If you rename the windows, update the `e/j/s` jump entries in `scripts/menu.sh` to match.
+## Layout
+
+bonsai creates a **bare single-window session** at the worktree path and switches to it —
+nothing more. Shape it however you like; bonsai never overrides your choice:
+
+```tmux
+# example: split every new session into editor + side terminal
+set-hook -g session-created 'split-window -h ; select-pane -L'
+```
+
+For richer, per-project layouts use a dedicated tool like
+[tmuxinator](https://github.com/tmuxinator/tmuxinator) or
+[smug](https://github.com/ivaaaan/smug).
 
 ## How it stays config-free
 
@@ -83,7 +95,7 @@ If you rename the windows, update the `e/j/s` jump entries in `scripts/menu.sh` 
 |------|-------------|
 | create branch + worktree, PR resolution, copy `.env`, remove + delete-if-merged | `wt` (`--no-hooks --no-cd`) |
 | find the worktree path | `git worktree list --porcelain` |
-| create session, build window layout, switch client, kill session/window | the plugin |
+| create session, switch client, kill session/window | the plugin |
 
 So worktrunk never needs to know about tmux, and tmux never needs a worktrunk config file.
 
@@ -130,7 +142,7 @@ For any agent without hooks, monitor the agent pane for output silence and route
 native alert through the same marker:
 
 ```tmux
-# in the agent window, e.g. add to layout creation:
+# in the agent's pane/window:
 setw monitor-silence 20
 set -g @bonsai-notify on
 set-hook -ga alert-silence 'run-shell "~/.tmux/plugins/tmux-bonsai/scripts/notify.sh done"'

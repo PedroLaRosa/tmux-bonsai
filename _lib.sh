@@ -4,11 +4,6 @@
 
 wt_sanitize() { printf '%s' "$1" | sed 's#[/\\]#-#g'; }      # mirrors worktrunk's `sanitize`
 
-wt_windows() {                                              # layout window names
-  local w; w=$(tmux show-option -gqv @bonsai-windows)
-  printf '%s' "${w:-edit agent serve git}"
-}
-
 wt_agent() {
   local a; a=$(tmux show-option -gqv @bonsai-agent)
   printf '%s' "${a:-claude}"
@@ -29,14 +24,11 @@ wt_copy_ignored() {                                         # path -> copy .env 
   [ -n "${1:-}" ] && ( cd "$1" && wt step copy-ignored ) >/dev/null 2>&1 || true
 }
 
-# Create the session + window layout if it doesn't exist. Echoes the session name.
+# Create a bare single-window session if it doesn't exist. Echoes the session name.
+# Layout is the user's business (a separate plugin, or a tmux `session-created` hook).
 wt_ensure_session() {                                       # branch path
-  local S p first w
-  S=$(wt_sanitize "$1"); p="$2"
-  if ! tmux has-session -t "$S" 2>/dev/null; then
-    set -- $(wt_windows); first="$1"; shift
-    tmux new-session -d -s "$S" -c "$p" -n "$first"
-    for w in "$@"; do tmux new-window -d -t "$S" -n "$w" -c "$p"; done
-  fi
+  local S
+  S=$(wt_sanitize "$1")
+  tmux has-session -t "$S" 2>/dev/null || tmux new-session -d -s "$S" -c "$2"
   printf '%s' "$S"
 }
