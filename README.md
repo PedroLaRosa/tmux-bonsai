@@ -1,6 +1,15 @@
-# tmux-worktrunk
+# 🌳 tmux-bonsai
 
-A self-contained tmux plugin for a git **worktree-per-task** workflow.
+> Cultivate parallel git worktrees and AI agents across branches — without leaving tmux.
+
+**tmux-bonsai** turns your tmux server into a workbench for a git **worktree-per-task**
+workflow. Spin up an isolated worktree for any branch, drop it into its own tmux session
+with a ready-made window layout, and launch an AI coding agent (Claude Code, opencode, …)
+right where the work lives — then get pinged the moment any agent in any session finishes
+or needs input. Jump between tasks with a single `fzf` picker, promote a scratch window
+into its own session, and prune merged worktrees when you're done. Like tending a bonsai:
+many small branches, each shaped deliberately, all in view at once.
+
 [worktrunk](https://worktrunk.dev) (`wt`) is the git engine; the plugin owns all the
 tmux orchestration. **No worktrunk config / hooks required** — every `wt` call is made
 with `--no-hooks --no-cd`, and the plugin creates the sessions, builds the window
@@ -21,14 +30,14 @@ That's it. No `~/.config/worktrunk/config.toml`, no shell functions.
 
 ### TPM
 ```tmux
-set -g @plugin 'youruser/tmux-worktrunk'
+set -g @plugin 'youruser/tmux-bonsai'
 run '~/.tmux/plugins/tpm/tpm'
 ```
 `prefix + I` to fetch.
 
 ### Local / no TPM
 ```tmux
-run-shell '~/code/tmux-worktrunk/worktrunk.tmux'
+run-shell '~/code/tmux-bonsai/bonsai.tmux'
 ```
 `tmux source-file ~/.tmux.conf` to reload.
 
@@ -60,10 +69,10 @@ session).
 ## Options
 
 ```tmux
-set -g @worktrunk-key     'W'                  # menu key (under prefix)
-set -g @worktrunk-agent   'claude'             # 'opencode', 'opencode run', ...
-set -g @worktrunk-windows 'edit agent serve git'  # layout; first window is focused
-set -g @worktrunk-notify  'on'                     # agent markers + focus-clear
+set -g @bonsai-key     'W'                  # menu key (under prefix)
+set -g @bonsai-agent   'claude'             # 'opencode', 'opencode run', ...
+set -g @bonsai-windows 'edit agent serve git'  # layout; first window is focused
+set -g @bonsai-notify  'on'                     # agent markers + focus-clear
 ```
 
 If you rename the windows, update the `e/j/s` jump entries in `scripts/menu.sh` to match.
@@ -104,7 +113,7 @@ It wires both agents to `scripts/notify.sh`:
 Then enable the tmux side and reload:
 
 ```tmux
-set -g @worktrunk-notify on
+set -g @bonsai-notify on
 ```
 
 This turns on `focus-events` and clears a window's marker the moment you focus it.
@@ -123,8 +132,8 @@ native alert through the same marker:
 ```tmux
 # in the agent window, e.g. add to layout creation:
 setw monitor-silence 20
-set -g @worktrunk-notify on
-set-hook -ga alert-silence 'run-shell "~/.tmux/plugins/tmux-worktrunk/scripts/notify.sh done"'
+set -g @bonsai-notify on
+set-hook -ga alert-silence 'run-shell "~/.tmux/plugins/tmux-bonsai/scripts/notify.sh done"'
 ```
 
 Less precise (a long pause mid-task can false-trigger), but needs no agent support.
@@ -137,9 +146,9 @@ or `terminal-notifier`/`osascript` (macOS). Kitty users can swap in `kitten noti
 ## Optional: key-table instead of a menu
 
 ```tmux
-bind -T worktree n display-popup -d "#{pane_current_path}" -E "~/code/tmux-worktrunk/scripts/new.sh"
-bind -T worktree o display-popup -d "#{pane_current_path}" -E "~/code/tmux-worktrunk/scripts/switch.sh"
-bind -T worktree x confirm-before -p "remove? (y/n) " "run-shell '~/code/tmux-worktrunk/scripts/remove.sh'"
+bind -T worktree n display-popup -d "#{pane_current_path}" -E "~/code/tmux-bonsai/scripts/new.sh"
+bind -T worktree o display-popup -d "#{pane_current_path}" -E "~/code/tmux-bonsai/scripts/switch.sh"
+bind -T worktree x confirm-before -p "remove? (y/n) " "run-shell '~/code/tmux-bonsai/scripts/remove.sh'"
 bind w switch-client -T worktree
 ```
 

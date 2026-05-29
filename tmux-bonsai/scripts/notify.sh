@@ -28,7 +28,7 @@ esac
 body="[$sess] ${msg:-$wname}"
 
 if command -v notify-send >/dev/null 2>&1; then
-  notify-send -a worktrunk "$icon $title" "$body"
+  notify-send -a bonsai "$icon $title" "$body"
 elif command -v terminal-notifier >/dev/null 2>&1; then
   terminal-notifier -title "$icon $title" -message "$body" -group "wt-$sess" >/dev/null 2>&1
 elif command -v osascript >/dev/null 2>&1; then

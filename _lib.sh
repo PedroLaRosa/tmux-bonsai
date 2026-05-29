@@ -5,12 +5,12 @@
 wt_sanitize() { printf '%s' "$1" | sed 's#[/\\]#-#g'; }      # mirrors worktrunk's `sanitize`
 
 wt_windows() {                                              # layout window names
-  local w; w=$(tmux show-option -gqv @worktrunk-windows)
+  local w; w=$(tmux show-option -gqv @bonsai-windows)
   printf '%s' "${w:-edit agent serve git}"
 }
 
 wt_agent() {
-  local a; a=$(tmux show-option -gqv @worktrunk-agent)
+  local a; a=$(tmux show-option -gqv @bonsai-agent)
   printf '%s' "${a:-claude}"
 }
 

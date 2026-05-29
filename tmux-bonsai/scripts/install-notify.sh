@@ -38,6 +38,6 @@ echo "  ✓ opencode:    $OCP/wt-notify.js"
 echo "    (if opencode doesn't load it, try ~/.config/opencode/plugins/ — dir name varies by version)"
 
 echo
-echo "Last step: in ~/.tmux.conf add   set -g @worktrunk-notify on   then reload."
+echo "Last step: in ~/.tmux.conf add   set -g @bonsai-notify on   then reload."
 echo
 read -rn1 -p "[any key to close]"
