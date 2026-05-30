@@ -6,9 +6,8 @@
 workflow. Spin up an isolated worktree for any branch, drop it into its own tmux session,
 and launch an AI coding agent (Claude Code, opencode, …) right where the work lives — then
 get pinged the moment any agent in any session finishes or needs input. Jump between tasks
-with a single `fzf` picker, promote a scratch window into its own session, and prune merged
-worktrees when you're done. Like tending a bonsai: many small branches, each shaped
-deliberately, all in view at once.
+with a single `fzf` picker, and promote a scratch window into its own session. Like tending
+a bonsai: many small branches, each shaped deliberately, all in view at once.
 
 Bring your own layout: bonsai never enforces one — shape each session with a separate
 plugin (tmuxinator, smug) or a tmux `session-created` hook (see [Layout](#layout)).
@@ -58,7 +57,6 @@ run-shell '~/code/tmux-bonsai/bonsai.tmux'
 | N | Set up agent notifications (writes the Claude Code + opencode hooks) |
 | c | Clear all agent markers |
 | x | Remove the current worktree (auto-detects session vs window) |
-| X | Remove every worktree whose branch is merged into the default branch |
 
 The "open / switch" picker handles all three navigation cases in one place: an existing
 worktree (jumps to its session), a local branch with no worktree yet, or a teammate's
@@ -91,7 +89,7 @@ For richer, per-project layouts use a dedicated tool like
 
 | Step | Who does it |
 |------|-------------|
-| create branch + worktree, copy `.env`, remove + delete-if-merged | `wt` (`--no-hooks --no-cd`) |
+| create branch + worktree, copy `.env`, remove | `wt` (`--no-hooks --no-cd`) |
 | find the worktree path | `git worktree list --porcelain` |
 | create session, switch client, kill session/window | the plugin |
 
@@ -166,7 +164,5 @@ bind w switch-client -T worktree
 
 - Teardown runs via `run-shell` (tmux server context), not inside the worktree's shell,
   so removing the session you're in is safe.
-- `prune` uses a git-ancestor check — catches fast-forward/rebase merges, not squash.
-  For squashed branches use `wt list --full` (dims safe-to-delete) and remove by hand.
 - The fragile part of any tmux plugin is `display-menu` argument quoting; test each entry
   if you edit `scripts/menu.sh`.
