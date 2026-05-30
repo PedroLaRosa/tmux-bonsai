@@ -24,7 +24,6 @@ tears things down itself.
 - [worktrunk](https://worktrunk.dev) (`wt`) on `PATH`
 - `git`, `awk`, `sed` (standard)
 - `fzf` — for the "open / switch" picker
-- `gh` (or `glab`) — for "open PR"
 - your agent CLI (`claude`, `opencode`, ...) — for "new + agent"
 
 That's it. No `~/.config/worktrunk/config.toml`, no shell functions.
@@ -53,7 +52,6 @@ run-shell '~/code/tmux-bonsai/bonsai.tmux'
 | n | New worktree → its own session |
 | a | New worktree + launch the agent in that session |
 | o | Open / switch — fzf over worktrees **and** local/remote branches (with log preview) |
-| p | Open a teammate's PR by number |
 | w | New worktree as a **window** in the current session |
 | r | Promote the current window-worktree into its own session |
 | L | List all worktrees (`wt list --full`) |
@@ -93,7 +91,7 @@ For richer, per-project layouts use a dedicated tool like
 
 | Step | Who does it |
 |------|-------------|
-| create branch + worktree, PR resolution, copy `.env`, remove + delete-if-merged | `wt` (`--no-hooks --no-cd`) |
+| create branch + worktree, copy `.env`, remove + delete-if-merged | `wt` (`--no-hooks --no-cd`) |
 | find the worktree path | `git worktree list --porcelain` |
 | create session, switch client, kill session/window | the plugin |
 

@@ -41,7 +41,6 @@ echo "Dependency check:"
 printf '  tmux (>=3.2)  : %s\n' "$(tmux -V 2>/dev/null || echo 'NOT FOUND')"
 printf '  worktrunk (wt): %s\n' "$(command -v wt    || echo 'NOT FOUND - install worktrunk')"
 printf '  fzf           : %s\n' "$(command -v fzf   || echo 'NOT FOUND - needed for open/switch')"
-printf '  gh or glab    : %s\n' "$(command -v gh || command -v glab || echo 'NOT FOUND - needed for open PR')"
 printf '  jq            : %s\n' "$(command -v jq    || echo 'NOT FOUND - needed for notification setup')"
 
 KEY="$(tmux show-option -gqv @bonsai-key 2>/dev/null)"; KEY="${KEY:-W}"

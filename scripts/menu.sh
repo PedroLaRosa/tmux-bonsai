@@ -4,7 +4,6 @@ tmux display-menu -T "#[align=centre] bonsai " \
   "new worktree"            n "display-popup -d '#{pane_current_path}' -E '$S/new.sh'" \
   "new worktree + agent"    a "display-popup -d '#{pane_current_path}' -E '$S/new.sh agent'" \
   "open / switch"           o "display-popup -d '#{pane_current_path}' -E '$S/switch.sh'" \
-  "open PR"                 p "display-popup -d '#{pane_current_path}' -E '$S/pr.sh'" \
   "" \
   "worktree as window"      w "display-popup -d '#{pane_current_path}' -E '$S/window.sh'" \
   "promote window->session" r "run-shell '$S/promote.sh'" \
