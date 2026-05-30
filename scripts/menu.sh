@@ -6,6 +6,7 @@ tmux display-menu -T "#[align=centre] bonsai " \
   "open / switch"           o "display-popup -d '#{pane_current_path}' -E '$S/switch.sh'" \
   "" \
   "worktree as window"      w "display-popup -d '#{pane_current_path}' -E '$S/window.sh'" \
+  "worktree as window + agent" W "display-popup -d '#{pane_current_path}' -E '$S/window.sh agent'" \
   "promote window->session" r "run-shell '$S/promote.sh'" \
   "" \
   "list worktrees"          L "display-popup -d '#{pane_current_path}' -E '$S/list.sh'" \
