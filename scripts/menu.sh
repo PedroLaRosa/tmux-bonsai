@@ -12,5 +12,4 @@ tmux display-menu -T "#[align=centre] bonsai " \
   "setup notifications"     N "display-popup -d '#{pane_current_path}' -E '$S/install-notify.sh'" \
   "clear agent markers"     c "run-shell '$S/clear-markers.sh'" \
   "" \
-  "remove current"          x "confirm-before -p 'remove this worktree? (y/n) ' \"run-shell '$S/remove.sh'\"" \
-  "prune merged"            X "confirm-before -p 'prune merged worktrees? (y/n) ' \"display-popup -d '#{pane_current_path}' -E '$S/prune.sh'\""
+  "remove current"          x "confirm-before -p 'remove this worktree? (y/n) ' \"run-shell '$S/remove.sh'\""
