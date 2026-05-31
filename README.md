@@ -12,6 +12,10 @@ a bonsai: many small branches, each shaped deliberately, all in view at once.
 Bring your own layout: bonsai never enforces one — shape each session with a separate
 plugin (tmuxinator, smug) or a tmux `session-created` hook (see [Layout](#layout)).
 
+<p align="center">
+  <img src="docs/menu.png" alt="tmux-bonsai menu (prefix + W): Session, Window, Notify and Remove actions" width="640">
+</p>
+
 [worktrunk](https://worktrunk.dev) (`wt`) is the git engine; the plugin owns all the
 tmux orchestration. **No worktrunk config / hooks required** — every `wt` call is made
 with `--no-hooks --no-cd`, and the plugin creates the session, switches the client, and
