@@ -2,18 +2,18 @@
 S="$(cd "$(dirname "$0")" && pwd)"
 tmux display-menu -T "#[align=centre] bonsai " -- \
   "-#[align=centre]Session" "" "" \
-  "new session worktree" n "display-popup -d '#{pane_current_path}' -E '$S/new.sh'" \
-  "new session worktree + agent" a "display-popup -d '#{pane_current_path}' -E '$S/new.sh agent'" \
-  "open / switch session worktree" o "display-popup -d '#{pane_current_path}' -E '$S/switch.sh'" \
+  "new session worktree" n "run-shell -b '$S/launch.sh new.sh'" \
+  "new session worktree + agent" a "run-shell -b '$S/launch.sh new.sh agent'" \
+  "open / switch session worktree" o "run-shell -b '$S/launch.sh switch.sh'" \
   "" \
   "-#[align=centre]Window" "" "" \
-  "new window worktree" w "display-popup -d '#{pane_current_path}' -E '$S/window.sh'" \
-  "new window worktree + agent" W "display-popup -d '#{pane_current_path}' -E '$S/window.sh agent'" \
+  "new window worktree" w "run-shell -b '$S/launch.sh window.sh'" \
+  "new window worktree + agent" W "run-shell -b '$S/launch.sh window.sh agent'" \
   "promote window->session" r "run-shell '$S/promote.sh'" \
   "" \
   "-#[align=centre]Notify" "" "" \
-  "list worktrees" L "display-popup -d '#{pane_current_path}' -E '$S/list.sh'" \
-  "setup notifications" N "display-popup -d '#{pane_current_path}' -E '$S/install-notify.sh'" \
+  "list worktrees" L "run-shell -b '$S/launch.sh list.sh'" \
+  "setup notifications" N "run-shell -b '$S/launch.sh install-notify.sh'" \
   "clear agent markers" c "run-shell '$S/clear-markers.sh'" \
   "" \
   "-#[align=centre]Remove" "" "" \

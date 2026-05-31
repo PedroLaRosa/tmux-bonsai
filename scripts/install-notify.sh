@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 S="$(cd "$(dirname "$0")" && pwd)"
+. "$S/_lib.sh"
 NOTIFY="$S/notify.sh"
 
 echo "Wiring agent notifications -> $NOTIFY"
@@ -41,3 +42,4 @@ echo
 echo "Last step: in ~/.tmux.conf add   set -g @bonsai-notify on   then reload."
 echo
 read -rn1 -p "[any key to close]"
+wt_back                          # informational — always return to the menu

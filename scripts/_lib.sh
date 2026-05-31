@@ -4,6 +4,10 @@
 
 wt_sanitize() { printf '%s' "$1" | sed 's#[/\\]#-#g'; }      # mirrors worktrunk's `sanitize`
 
+# Signal launch.sh to re-open the bonsai menu, then exit cleanly. Used on cancel
+# (fzf abort / empty prompt / key-to-close) so backing out returns to the menu.
+wt_back() { tmux set-option -g @bonsai-back 1; exit 0; }
+
 wt_agent() {
   local a; a=$(tmux show-option -gqv @bonsai-agent)
   printf '%s' "${a:-claude}"
