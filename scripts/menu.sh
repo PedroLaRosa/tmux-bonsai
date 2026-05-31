@@ -4,7 +4,7 @@ tmux display-menu -T "#[align=centre] bonsai " -- \
   "-#[align=centre]Session" "" "" \
   "new session worktree" n "display-popup -d '#{pane_current_path}' -E '$S/new.sh'" \
   "new session worktree + agent" a "display-popup -d '#{pane_current_path}' -E '$S/new.sh agent'" \
-  "open / switch" o "display-popup -d '#{pane_current_path}' -E '$S/switch.sh'" \
+  "open / switch session worktree" o "display-popup -d '#{pane_current_path}' -E '$S/switch.sh'" \
   "" \
   "-#[align=centre]Window" "" "" \
   "new window worktree" w "display-popup -d '#{pane_current_path}' -E '$S/window.sh'" \
