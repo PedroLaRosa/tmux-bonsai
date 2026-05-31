@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 S="$(cd "$(dirname "$0")" && pwd)"
-tmux display-menu -T "#[align=centre] bonsai " \
+tmux display-menu -T "#[align=centre] bonsai " -- \
   "-#[align=centre]Session"  "" "" \
   "new worktree"            n "display-popup -d '#{pane_current_path}' -E '$S/new.sh'" \
   "new worktree + agent"    a "display-popup -d '#{pane_current_path}' -E '$S/new.sh agent'" \
