@@ -17,4 +17,4 @@ tmux display-menu -T "#[align=centre] bonsai " -- \
   "clear agent markers" c "run-shell '$S/clear-markers.sh'" \
   "" \
   "-#[align=centre]Remove" "" "" \
-  "remove current" x "confirm-before -p 'remove this worktree? (y/n) ' \"run-shell '$S/remove.sh'\""
+  "remove current worktree" x "confirm-before -p 'remove this worktree? (y/n) ' \"run-shell '$S/remove.sh'\""
