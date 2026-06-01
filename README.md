@@ -35,10 +35,15 @@ That's it. No `~/.config/worktrunk/config.toml`, no shell functions.
 
 ### TPM
 ```tmux
-set -g @plugin 'youruser/tmux-bonsai'
-run '~/.tmux/plugins/tpm/tpm'
+set -g @plugin 'PedroLaRosa/tmux-bonsai'
+run '~/.tmux/plugins/tpm/tpm'   # keep this last — @plugin lines go above it
 ```
-`prefix + I` to fetch.
+`prefix + I` to fetch. No clone needed; TPM installs into `~/.tmux/plugins/tmux-bonsai/`.
+
+Pin a release instead of tracking the default branch:
+```tmux
+set -g @plugin 'PedroLaRosa/tmux-bonsai#v1.0.0'
+```
 
 ### Local / no TPM
 ```tmux
