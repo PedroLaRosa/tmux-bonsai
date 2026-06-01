@@ -72,6 +72,13 @@ worktree (jumps to its session), a local branch with no worktree yet, or a teamm
 remote branch (worktrunk checks it out into a fresh worktree, then the plugin builds the
 session).
 
+**Backing out returns to the menu.** Cancelling a popup action — ESC in the
+`o` picker, an empty prompt (just Enter) in `n`/`a`/`w`, or any key to close the
+informational `L`/`N` views — re-opens the bonsai menu instead of dropping you
+back in your pane. Completing an action (creating or switching a worktree) does
+not re-open it. The menu thus behaves like a navigable hierarchy rather than a
+one-shot launcher.
+
 ## Options
 
 ```tmux
