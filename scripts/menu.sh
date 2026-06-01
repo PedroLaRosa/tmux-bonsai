@@ -11,6 +11,10 @@ tmux display-menu -T "#[align=centre] bonsai " -- \
   "new window worktree + agent" W "run-shell -b '$S/launch.sh window.sh agent'" \
   "promote window->session" r "run-shell '$S/promote.sh'" \
   "" \
+  "-#[align=centre]Pane" "" "" \
+  "split pane right + agent" "|" "run-shell '$S/split.sh -h'" \
+  "split pane down + agent" "_" "run-shell '$S/split.sh -v'" \
+  "" \
   "-#[align=centre]Notify" "" "" \
   "list worktrees" L "run-shell -b '$S/launch.sh list.sh'" \
   "setup notifications" N "run-shell -b '$S/launch.sh install-notify.sh'" \

@@ -62,6 +62,8 @@ run-shell '~/code/tmux-bonsai/bonsai.tmux'
 | o | Open / switch — fzf over worktrees **and** local/remote branches (with log preview) |
 | w | New worktree as a **window** in the current session |
 | r | Promote the current window-worktree into its own session |
+| \| | Split the current pane **right** and launch the agent (same worktree) |
+| _ | Split the current pane **down** and launch the agent (same worktree) |
 | L | List all worktrees (`wt list --full`) |
 | N | Set up agent notifications (writes the Claude Code + opencode hooks) |
 | c | Clear all agent markers |
