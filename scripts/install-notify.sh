@@ -34,7 +34,9 @@ export const WtNotify = async ({ $ }) => ({
   }
 });
 JS
-sed -i "s#__NOTIFY__#$NOTIFY#" "$OCP/wt-notify.js"
+# portable substitute: BSD sed (macOS) needs `-i ''`, GNU sed (Linux) forbids it,
+# so avoid -i entirely and write through a temp file (same pattern as the jq merge above).
+tmp=$(mktemp); sed "s#__NOTIFY__#$NOTIFY#" "$OCP/wt-notify.js" > "$tmp" && mv "$tmp" "$OCP/wt-notify.js"
 echo "  ✓ opencode:    $OCP/wt-notify.js"
 echo "    (if opencode doesn't load it, try ~/.config/opencode/plugins/ — dir name varies by version)"
 
