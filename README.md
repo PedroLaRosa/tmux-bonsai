@@ -64,9 +64,10 @@ run-shell '~/code/tmux-bonsai/bonsai.tmux'
 | r | Promote the current window-worktree into its own session |
 | \| | Split the current pane **right** and launch the agent (same worktree) |
 | _ | Split the current pane **down** and launch the agent (same worktree) |
+| d | **Dashboard** — live jump board of every worktree + agent, one key jumps to the exact pane |
 | L | List all worktrees (`wt list --full`) |
 | N | Set up agent notifications (writes the Claude Code + opencode hooks) |
-| c | Clear all agent markers |
+| c | Clear all agent markers (per pane) |
 | x | Remove the current worktree (auto-detects session vs window) |
 
 The "open / switch" picker handles all three navigation cases in one place: an existing
@@ -84,9 +85,11 @@ one-shot launcher.
 ## Options
 
 ```tmux
-set -g @bonsai-key    'W'        # menu key (under prefix)
-set -g @bonsai-agent  'claude'   # 'opencode', 'opencode run', ...
-set -g @bonsai-notify 'on'       # agent markers + focus-clear
+set -g @bonsai-key           'W'        # menu key (under prefix)
+set -g @bonsai-agent         'claude'   # 'opencode', 'opencode run', ...
+set -g @bonsai-notify        'on'       # agent markers + focus-clear
+set -g @bonsai-dashboard-key ''         # optional direct key for the dashboard (under prefix); unset = via menu only
+set -g @bonsai-refresh       '2'        # dashboard live-refresh interval, in seconds
 ```
 
 ## Layout
@@ -125,16 +128,30 @@ Run **`prefix + W` -> "setup notifications"** (or `scripts/install-notify.sh` di
 It wires both agents to `scripts/notify.sh`:
 
 - **Claude Code** -> merges into `~/.claude/settings.json`:
-  `Stop` hook -> `notify.sh done`, `Notification` hook -> `notify.sh waiting`.
+  `UserPromptSubmit` -> `notify.sh working`, `Stop` -> `notify.sh done`,
+  `Notification` -> `notify.sh waiting`.
 - **opencode** -> drops an auto-loaded plugin at `~/.config/opencode/plugin/wt-notify.js`
-  that maps `session.idle` -> done and `session.error` -> error.
+  that maps the `chat.message` hook -> working, `session.idle` -> done and `session.error` -> error.
   (If your opencode version loads from `plugins/` instead of `plugin/`, move the file.)
 
 `notify.sh` runs inside the agent's pane (`$TMUX_PANE`), so it:
 
-1. Marks that window with `@agent_state` = `waiting` / `done` / `error`.
-2. Fires a desktop notification **only if you aren't already looking at that window**
-   (`notify-send` on Linux, `terminal-notifier`/`osascript` on macOS).
+1. Marks that **pane** with `@agent_state` (`working` / `waiting` / `done` / `error`) plus a
+   `@agent_state_ts` timestamp — the pane is the source of truth, so each split-pane agent is
+   tracked independently. It also mirrors the state onto the window (a coarse single-agent rollup
+   for the optional status-line glyph below).
+2. Fires a desktop notification **only if you aren't already looking at that exact pane**
+   (`notify-send` on Linux, `terminal-notifier`/`osascript` on macOS). `working` is mark-only
+   (it fires every turn), so it never alerts.
+
+| state | glyph | meaning |
+|-------|-------|---------|
+| working | 🔄 | agent is actively running (mark-only, no alert) |
+| waiting | 💬 | agent needs your input |
+| done | ✅ | agent finished |
+| error | ❗ | agent errored |
+| idle | — | live worktree, no agent event yet |
+| offline | ⏸ | worktree exists in git but has no live session |
 
 Then enable the tmux side and reload:
 
@@ -142,13 +159,40 @@ Then enable the tmux side and reload:
 set -g @bonsai-notify on
 ```
 
-This turns on `focus-events` and clears a window's marker the moment you focus it.
+This turns on `focus-events` and clears a pane's marker the moment you focus it.
 
-Optional status-line marker (adapt into your theme — it reads `@agent_state` per window):
+Optional status-line marker (adapt into your theme — it reads the **coarse per-window** rollup,
+so a window running two agents shows only the most recent state; the [dashboard](#dashboard) is
+the precise per-pane surface):
 
 ```tmux
 set -g window-status-format '#I:#W#{?#{!=:#{@agent_state},}, #{?#{==:#{@agent_state},waiting},💬,#{?#{==:#{@agent_state},error},❗,✅}},}'
 ```
+
+### Dashboard — cross-session jump board
+
+`prefix + W` -> **dashboard** (or bind a direct key with `@bonsai-dashboard-key`) opens a
+live-refreshing popup listing **every worktree and every running agent** in one place:
+
+```
+ 🌳 bonsai dashboard      [1-9 a-z] jump   [r] refresh   [q] back
+      state     worktree                where   age
+ ─────────────────────────────────────────────────────────────
+ 1  💬 waiting   fix-auth                [pane]  2m
+ 2  ❗ error     flaky-test              [pane]  1h
+ 3  🔄 working   add-cache               [pane]  7s
+ 4  — idle      main                    [sess]  —
+ 5  ⏸ offline   old-spike               [git]   —
+```
+
+- One row **per agent pane** (so two agents split in one window are two rows), sorted by urgency:
+  waiting -> error -> done -> working -> idle -> offline.
+- **Live + offline:** worktrees with no live tmux session are derived from `git worktree list`
+  and shown as `⏸ offline`; selecting one re-opens its session on the fly.
+- `where` is the jump target: `[pane]` / `[sess]` / `[win]` / `[git]`. Press a row's label to jump
+  to that **exact** session / window / pane — across sessions. `r` refreshes now, `q`/`Esc` backs out.
+- It snapshots on open and re-renders every `@bonsai-refresh` seconds (default `2`) — no daemon,
+  no background state. Closing it leaves nothing running.
 
 ### Layer 2 — tmux fallback (universal)
 

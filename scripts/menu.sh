@@ -16,6 +16,7 @@ tmux display-menu -T "#[align=centre] bonsai " -- \
   "split pane down + agent" "_" "run-shell '$S/split.sh -v'" \
   "" \
   "-#[align=centre]Notify" "" "" \
+  "dashboard (jump board)" d "run-shell -b '$S/launch.sh dashboard.sh'" \
   "list worktrees" L "run-shell -b '$S/launch.sh list.sh'" \
   "setup notifications" N "run-shell -b '$S/launch.sh install-notify.sh'" \
   "clear agent markers" c "run-shell '$S/clear-markers.sh'" \

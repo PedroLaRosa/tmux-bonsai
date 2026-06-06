@@ -16,6 +16,7 @@ if command -v jq >/dev/null 2>&1; then
     .hooks //= {}
     | .hooks.Stop = ((.hooks.Stop // []) + [{"matcher":"","hooks":[{"type":"command","command":($n+" done")}]}])
     | .hooks.Notification = ((.hooks.Notification // []) + [{"matcher":"","hooks":[{"type":"command","command":($n+" waiting")}]}])
+    | .hooks.UserPromptSubmit = ((.hooks.UserPromptSubmit // []) + [{"matcher":"","hooks":[{"type":"command","command":($n+" working")}]}])
   ' "$CC" > "$tmp" && mv "$tmp" "$CC" && echo "  ✓ Claude Code: $CC"
 else
   echo "  ! jq not found — skipping Claude Code (install jq, then re-run)"
@@ -27,6 +28,9 @@ mkdir -p "$OCP"
 cat > "$OCP/wt-notify.js" <<'JS'
 // Auto-loaded opencode plugin: forwards session events to the tmux notifier.
 export const WtNotify = async ({ $ }) => ({
+  // chat.message fires when you submit a prompt, before the agent processes it —
+  // opencode's analog of Claude's UserPromptSubmit, so mark the agent working.
+  "chat.message": async () => { try { await $`__NOTIFY__ working`; } catch (e) {} },
   event: async ({ event }) => {
     const map = { "session.idle": "done", "session.error": "error" };
     const state = map[event.type];
@@ -36,7 +40,7 @@ export const WtNotify = async ({ $ }) => ({
 JS
 # portable substitute: BSD sed (macOS) needs `-i ''`, GNU sed (Linux) forbids it,
 # so avoid -i entirely and write through a temp file (same pattern as the jq merge above).
-tmp=$(mktemp); sed "s#__NOTIFY__#$NOTIFY#" "$OCP/wt-notify.js" > "$tmp" && mv "$tmp" "$OCP/wt-notify.js"
+tmp=$(mktemp); sed "s#__NOTIFY__#$NOTIFY#g" "$OCP/wt-notify.js" > "$tmp" && mv "$tmp" "$OCP/wt-notify.js"
 echo "  ✓ opencode:    $OCP/wt-notify.js"
 echo "    (if opencode doesn't load it, try ~/.config/opencode/plugins/ — dir name varies by version)"
 
