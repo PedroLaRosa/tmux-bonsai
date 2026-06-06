@@ -8,7 +8,14 @@ path=$(tmux display-message -p '#{pane_current_path}')
 tmux set-option -gu @bonsai-back 2>/dev/null          # clear stale flag
 
 rel="$1"; shift                                       # e.g. new.sh [agent]
-tmux display-popup -d "$path" -E "$(printf '%q ' "$S/$rel" "$@")"   # blocks until popup closes
+cmd=$(printf '%q ' "$S/$rel" "$@")
+# The dashboard lists every pane + worktree, so it needs room; the prompt-style
+# actions (new/switch/list) are happy at tmux's default popup size.
+if [ "$rel" = dashboard.sh ]; then
+  tmux display-popup -w 80% -h 80% -d "$path" -E "$cmd"   # blocks until popup closes
+else
+  tmux display-popup -d "$path" -E "$cmd"
+fi
 
 if [ "$(tmux show-option -gqv @bonsai-back)" = 1 ]; then
   tmux set-option -gu @bonsai-back

@@ -172,27 +172,33 @@ set -g window-status-format '#I:#W#{?#{!=:#{@agent_state},}, #{?#{==:#{@agent_st
 ### Dashboard — cross-session jump board
 
 `prefix + W` -> **dashboard** (or bind a direct key with `@bonsai-dashboard-key`) opens a
-live-refreshing popup listing **every worktree and every running agent** in one place:
+live-refreshing popup listing **every open pane and every worktree** in one place:
 
 ```
  🌳 bonsai dashboard      [1-9 a-z] jump   [r] refresh   [q] back
-      state     worktree                where   age
- ─────────────────────────────────────────────────────────────
- 1  💬 waiting   fix-auth                [pane]  2m
- 2  ❗ error     flaky-test              [pane]  1h
- 3  🔄 working   add-cache               [pane]  7s
- 4  — idle      main                    [sess]  —
- 5  ⏸ offline   old-spike               [git]   —
+       state     worktree                  location                age
+ ───────────────────────────────────────────────────────────────────────────
+ 1  💬 waiting   fix-auth                  Pedro:zsh %1            2m
+ 2  ❗ error     flaky-test                Pedro:zsh %3            1h
+ 3  🔄 working   add-cache                 Playtomic:Manager %8    7s
+ 4  ▫  shell     registering-the-endpoints Playtomic:Nemo %11      —
+ 5  —  idle      main                      main                    —
+ 6  ⏸  offline   old-spike                 —                       —
 ```
 
-- One row **per agent pane** (so two agents split in one window are two rows), sorted by urgency:
-  waiting -> error -> done -> working -> idle -> offline.
-- **Live + offline:** worktrees with no live tmux session are derived from `git worktree list`
-  and shown as `⏸ offline`; selecting one re-opens its session on the fly.
-- `where` is the jump target: `[pane]` / `[sess]` / `[win]` / `[git]`. Press a row's label to jump
-  to that **exact** session / window / pane — across sessions. `r` refreshes now, `q`/`Esc` backs out.
+- One row **per open pane** — agents *and* plain shells (so two agents split in one window are
+  two rows). Sorted by urgency: waiting -> error -> done -> working -> idle -> shell -> offline.
+- **Every pane counts** as a place you can jump to (and a candidate future worktree); panes with no
+  agent marker show as `▫ shell`.
+- Each pane's worktree is resolved from **its own repo** (`git` run in that pane's directory), so the
+  board is correct no matter which session/repo you opened it from.
+- **Worktrees with no pane:** derived from `git worktree list` of every repo on the board — shown as
+  `— idle` if a session/window already exists, else `⏸ offline`; selecting one opens its session.
+- `location` is the real jump target (`session:window pane`). Press a row's label to jump to that
+  **exact** session / window / pane — across sessions. `r` refreshes now, `q`/`Esc` backs out.
 - It snapshots on open and re-renders every `@bonsai-refresh` seconds (default `2`) — no daemon,
-  no background state. Closing it leaves nothing running.
+  no background state. Closing it leaves nothing running. (`scripts/dashboard.sh --dump` prints the
+  rows once for debugging, without driving any client.)
 
 ### Layer 2 — tmux fallback (universal)
 
