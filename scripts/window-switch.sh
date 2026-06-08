@@ -5,8 +5,8 @@ branch=$(wt_pick_branch) || wt_back
 [ -z "${branch:-}" ] && wt_back
 path=$(wt_path_of "$branch")
 if [ -z "$path" ]; then
-  wt switch --no-hooks --no-cd "$branch" || { echo "wt switch failed"; sleep 1.5; exit 1; }
-  path=$(wt_path_of "$branch"); wt_copy_ignored "$path"
+  path=$(wt_checkout "$branch") || { echo "worktree switch failed"; sleep 1.5; exit 1; }
+  wt_copy_ignored "$path"
 fi
 S=$(wt_sanitize "$branch")
 # Jump to the worktree's window if it already exists, else open one for it.

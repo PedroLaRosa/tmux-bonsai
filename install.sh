@@ -38,7 +38,7 @@ fi
 echo ""
 echo "Dependency check:"
 printf '  tmux (>=3.2)  : %s\n' "$(tmux -V 2>/dev/null || echo 'NOT FOUND')"
-printf '  worktrunk (wt): %s\n' "$(command -v wt    || echo 'NOT FOUND - install worktrunk')"
+printf '  git (>=2.17)  : %s\n' "$(git --version 2>/dev/null || echo 'NOT FOUND - install git')"
 printf '  fzf           : %s\n' "$(command -v fzf   || echo 'NOT FOUND - needed for open/switch')"
 
 KEY="$(tmux show-option -gqv @bonsai-key 2>/dev/null)"; KEY="${KEY:-W}"
