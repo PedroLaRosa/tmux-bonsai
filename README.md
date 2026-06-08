@@ -4,16 +4,20 @@
 
 **tmux-bonsai** turns your tmux server into a workbench for a git **worktree-per-task**
 workflow. Spin up an isolated worktree for any branch, drop it into its own tmux session,
-and launch an AI coding agent (Claude Code, opencode, …) right where the work lives — then
-get pinged the moment any agent in any session finishes or needs input. Jump between tasks
-with a single `fzf` picker, and promote a scratch window into its own session. Like tending
-a bonsai: many small branches, each shaped deliberately, all in view at once.
+and launch an AI coding agent (Claude Code, opencode, …) right where the work lives. Jump
+between tasks with a single `fzf` picker, and promote a scratch window into its own session.
+Like tending a bonsai: many small branches, each shaped deliberately, all in view at once.
+
+Want desktop alerts when an agent finishes or needs input, plus a live cross-session
+jump-board dashboard? Add the companion plugin
+[**tmux-agent-notify**](https://github.com/PedroLaRosa/tmux-agent-notify) — see
+[Companion](#companion-agent-notifications--dashboard).
 
 Bring your own layout: bonsai never enforces one — shape each session with a separate
 plugin (tmuxinator, smug) or a tmux `session-created` hook (see [Layout](#layout)).
 
 <p align="center">
-  <img src="docs/menu.png" alt="tmux-bonsai menu (prefix + W): Session, Window, Notify and Remove actions" width="640">
+  <img src="docs/menu.png" alt="tmux-bonsai menu (prefix + W): Session, Window, Pane and Remove actions" width="640">
 </p>
 
 [worktrunk](https://worktrunk.dev) (`wt`) is the git engine; the plugin owns all the
@@ -64,10 +68,7 @@ run-shell '~/code/tmux-bonsai/bonsai.tmux'
 | r | Promote the current window-worktree into its own session |
 | \| | Split the current pane **right** and launch the agent (same worktree) |
 | _ | Split the current pane **down** and launch the agent (same worktree) |
-| d | **Dashboard** — live jump board of every worktree + agent, one key jumps to the exact pane |
 | L | List all worktrees (`wt list --full`) |
-| N | Set up agent notifications (writes the Claude Code + opencode hooks) |
-| c | Clear all agent markers (per pane) |
 | x | Remove the current worktree (auto-detects session vs window) |
 
 The "open / switch" picker handles all three navigation cases in one place: an existing
@@ -77,7 +78,7 @@ session).
 
 **Backing out returns to the menu.** Cancelling a popup action — ESC in the
 `o` picker, an empty prompt (just Enter) in `n`/`a`/`w`, or any key to close the
-informational `L`/`N` views — re-opens the bonsai menu instead of dropping you
+informational `L` view — re-opens the bonsai menu instead of dropping you
 back in your pane. Completing an action (creating or switching a worktree) does
 not re-open it. The menu thus behaves like a navigable hierarchy rather than a
 one-shot launcher.
@@ -85,11 +86,8 @@ one-shot launcher.
 ## Options
 
 ```tmux
-set -g @bonsai-key           'W'        # menu key (under prefix)
-set -g @bonsai-agent         'claude'   # 'opencode', 'opencode run', ...
-set -g @bonsai-notify        'on'       # agent markers + focus-clear
-set -g @bonsai-dashboard-key ''         # optional direct key for the dashboard (under prefix); unset = via menu only
-set -g @bonsai-refresh       '2'        # dashboard live-refresh interval, in seconds
+set -g @bonsai-key   'W'        # menu key (under prefix)
+set -g @bonsai-agent 'claude'   # 'opencode', 'opencode run', ...
 ```
 
 ## Layout
@@ -117,107 +115,20 @@ For richer, per-project layouts use a dedicated tool like
 So worktrunk never needs to know about tmux, and tmux never needs a worktrunk config file.
 
 
-## Agent notifications
+## Companion: agent notifications & dashboard
 
-Get alerted when an agent in **any** pane/window/session finishes or needs input.
-Two layers:
+Notifications and the cross-session jump-board dashboard live in a separate, optional
+plugin: [**tmux-agent-notify**](https://github.com/PedroLaRosa/tmux-agent-notify). Install
+it alongside bonsai to get:
 
-### Layer 1 — agent-native hooks (precise)
+- **Desktop alerts** when an agent in any pane/session finishes (✅), needs input (💬), or
+  errors (❗) — wired into Claude Code and opencode with one command.
+- **A live jump-board dashboard** listing every open pane and every worktree, where one
+  keypress jumps to the exact session / window / pane across the whole tmux server.
 
-Run **`prefix + W` -> "setup notifications"** (or `scripts/install-notify.sh` directly).
-It wires both agents to `scripts/notify.sh`:
-
-- **Claude Code** -> merges into `~/.claude/settings.json`:
-  `UserPromptSubmit` -> `notify.sh working`, `Stop` -> `notify.sh done`,
-  `Notification` -> `notify.sh waiting`.
-- **opencode** -> drops an auto-loaded plugin at `~/.config/opencode/plugin/wt-notify.js`
-  that maps the `chat.message` hook -> working, `session.idle` -> done and `session.error` -> error.
-  (If your opencode version loads from `plugins/` instead of `plugin/`, move the file.)
-
-`notify.sh` runs inside the agent's pane (`$TMUX_PANE`), so it:
-
-1. Marks that **pane** with `@agent_state` (`working` / `waiting` / `done` / `error`) plus a
-   `@agent_state_ts` timestamp — the pane is the source of truth, so each split-pane agent is
-   tracked independently. It also mirrors the state onto the window (a coarse single-agent rollup
-   for the optional status-line glyph below).
-2. Fires a desktop notification **only if you aren't already looking at that exact pane**
-   (`notify-send` on Linux, `terminal-notifier`/`osascript` on macOS). `working` is mark-only
-   (it fires every turn), so it never alerts.
-
-| state | glyph | meaning |
-|-------|-------|---------|
-| working | 🔄 | agent is actively running (mark-only, no alert) |
-| waiting | 💬 | agent needs your input |
-| done | ✅ | agent finished |
-| error | ❗ | agent errored |
-| idle | — | live worktree, no agent event yet |
-| offline | ⏸ | worktree exists in git but has no live session |
-
-Then enable the tmux side and reload:
-
-```tmux
-set -g @bonsai-notify on
-```
-
-This turns on `focus-events` and clears a pane's marker the moment you focus it.
-
-Optional status-line marker (adapt into your theme — it reads the **coarse per-window** rollup,
-so a window running two agents shows only the most recent state; the [dashboard](#dashboard) is
-the precise per-pane surface):
-
-```tmux
-set -g window-status-format '#I:#W#{?#{!=:#{@agent_state},}, #{?#{==:#{@agent_state},waiting},💬,#{?#{==:#{@agent_state},error},❗,✅}},}'
-```
-
-### Dashboard — cross-session jump board
-
-`prefix + W` -> **dashboard** (or bind a direct key with `@bonsai-dashboard-key`) opens a
-live-refreshing popup listing **every open pane and every worktree** in one place:
-
-```
- 🌳 bonsai dashboard      [1-9 a-z] jump   [r] refresh   [q] back
-       state     worktree                  location                age
- ───────────────────────────────────────────────────────────────────────────
- 1  💬 waiting   fix-auth                  Pedro:zsh %1            2m
- 2  ❗ error     flaky-test                Pedro:zsh %3            1h
- 3  🔄 working   add-cache                 Playtomic:Manager %8    7s
- 4  ▫  shell     registering-the-endpoints Playtomic:Nemo %11      —
- 5  —  idle      main                      main                    —
- 6  ⏸  offline   old-spike                 —                       —
-```
-
-- One row **per open pane** — agents *and* plain shells (so two agents split in one window are
-  two rows). Sorted by urgency: waiting -> error -> done -> working -> idle -> shell -> offline.
-- **Every pane counts** as a place you can jump to (and a candidate future worktree); panes with no
-  agent marker show as `▫ shell`.
-- Each pane's worktree is resolved from **its own repo** (`git` run in that pane's directory), so the
-  board is correct no matter which session/repo you opened it from.
-- **Worktrees with no pane:** derived from `git worktree list` of every repo on the board — shown as
-  `— idle` if a session/window already exists, else `⏸ offline`; selecting one opens its session.
-- `location` is the real jump target (`session:window pane`). Press a row's label to jump to that
-  **exact** session / window / pane — across sessions. `r` refreshes now, `q`/`Esc` backs out.
-- It snapshots on open and re-renders every `@bonsai-refresh` seconds (default `2`) — no daemon,
-  no background state. Closing it leaves nothing running. (`scripts/dashboard.sh --dump` prints the
-  rows once for debugging, without driving any client.)
-
-### Layer 2 — tmux fallback (universal)
-
-For any agent without hooks, monitor the agent pane for output silence and route the
-native alert through the same marker:
-
-```tmux
-# in the agent's pane/window:
-setw monitor-silence 20
-set -g @bonsai-notify on
-set-hook -ga alert-silence 'run-shell "~/.tmux/plugins/tmux-bonsai/scripts/notify.sh done"'
-```
-
-Less precise (a long pause mid-task can false-trigger), but needs no agent support.
-
-### Requirements for notifications
-
-`jq` (to merge Claude Code settings), and `notify-send` (Linux: `apt install libnotify-bin`)
-or `terminal-notifier`/`osascript` (macOS). Kitty users can swap in `kitten notify`.
+It's fully standalone — it tracks agents by marking each pane with an `@agent_state` tmux
+option, so it works with or without bonsai. The two simply compose: create worktrees with
+bonsai, watch and jump to their agents with tmux-agent-notify.
 
 ## Optional: key-table instead of a menu
 
