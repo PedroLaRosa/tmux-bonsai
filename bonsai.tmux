@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
-# tmux-bonsai — self-contained worktree management + agent notifications.
+# tmux-bonsai — self-contained git worktree management for tmux.
+# Agent notifications + the jump-board dashboard live in the companion plugin
+# tmux-agent-notify (https://github.com/PedroLaRosa/tmux-agent-notify).
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 key="$(tmux show-option -gqv @bonsai-key)"; key="${key:-W}"
 tmux bind-key "$key" run-shell "$CURRENT_DIR/scripts/menu.sh"
-
-# Clear a window's agent marker as soon as you focus it.
-if [ "$(tmux show-option -gqv @bonsai-notify)" = on ]; then
-  tmux set-option -g focus-events on
-  tmux set-hook -ga pane-focus-in 'set-option -u -w @agent_state'
-fi

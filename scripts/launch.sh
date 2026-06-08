@@ -8,7 +8,8 @@ path=$(tmux display-message -p '#{pane_current_path}')
 tmux set-option -gu @bonsai-back 2>/dev/null          # clear stale flag
 
 rel="$1"; shift                                       # e.g. new.sh [agent]
-tmux display-popup -d "$path" -E "$(printf '%q ' "$S/$rel" "$@")"   # blocks until popup closes
+cmd=$(printf '%q ' "$S/$rel" "$@")
+tmux display-popup -d "$path" -E "$cmd"               # blocks until popup closes
 
 if [ "$(tmux show-option -gqv @bonsai-back)" = 1 ]; then
   tmux set-option -gu @bonsai-back
