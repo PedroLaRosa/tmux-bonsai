@@ -65,6 +65,7 @@ run-shell '~/code/tmux-bonsai/bonsai.tmux'
 | a | New worktree + launch the agent in that session |
 | o | Open / switch — fzf over worktrees **and** local/remote branches (with log preview) |
 | w | New worktree as a **window** in the current session |
+| O | Open / switch — like `o`, but jumps to (or opens) the worktree as a **window** in the current session |
 | r | Promote the current window-worktree into its own session |
 | \| | Split the current pane **right** and launch the agent (same worktree) |
 | _ | Split the current pane **down** and launch the agent (same worktree) |
@@ -77,7 +78,7 @@ remote branch (worktrunk checks it out into a fresh worktree, then the plugin bu
 session).
 
 **Backing out returns to the menu.** Cancelling a popup action — ESC in the
-`o` picker, an empty prompt (just Enter) in `n`/`a`/`w`, or any key to close the
+`o`/`O` picker, an empty prompt (just Enter) in `n`/`a`/`w`, or any key to close the
 informational `L` view — re-opens the bonsai menu instead of dropping you
 back in your pane. Completing an action (creating or switching a worktree) does
 not re-open it. The menu thus behaves like a navigable hierarchy rather than a
