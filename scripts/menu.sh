@@ -9,6 +9,7 @@ tmux display-menu -T "#[align=centre] bonsai " -- \
   "-#[align=centre]Window" "" "" \
   "new window worktree" w "run-shell -b '$S/launch.sh window.sh'" \
   "new window worktree + agent" W "run-shell -b '$S/launch.sh window.sh agent'" \
+  "open / switch window worktree" O "run-shell -b '$S/launch.sh window-switch.sh'" \
   "promote window->session" r "run-shell '$S/promote.sh'" \
   "" \
   "-#[align=centre]Pane" "" "" \

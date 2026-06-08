@@ -18,6 +18,19 @@ wt_path_of() {                                              # branch -> worktree
     /^worktree /{w=$2} /^branch /{if($2==b) print w}'
 }
 
+# fzf-pick a worktree/branch and print it. Returns fzf's exit code so callers can
+# `branch=$(wt_pick_branch) || wt_back` — it must NOT call wt_back itself, since
+# that runs in the $(...) subshell and would fail to exit the parent script.
+wt_pick_branch() {
+  {
+    git worktree list --porcelain | awk '/^branch /{sub("refs/heads/","",$2);print $2}'
+    git for-each-ref --format='%(refname:short)' refs/heads
+    git for-each-ref --format='%(refname:short)' refs/remotes | grep -v '/HEAD$' | sed 's#^[^/]*/##'
+  } | awk 'NF && !seen[$0]++' \
+    | fzf --prompt='worktree/branch> ' \
+          --preview 'git log --oneline --color=always -20 {} 2>/dev/null'
+}
+
 wt_default_branch() {
   wt config state default-branch 2>/dev/null \
     || git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##' \
