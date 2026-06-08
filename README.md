@@ -20,20 +20,20 @@ plugin (tmuxinator, smug) or a tmux `session-created` hook (see [Layout](#layout
   <img src="docs/menu.png" alt="tmux-bonsai menu (prefix + W): Session, Window, Pane and Remove actions" width="640">
 </p>
 
-[worktrunk](https://worktrunk.dev) (`wt`) is the git engine; the plugin owns all the
-tmux orchestration. **No worktrunk config / hooks required** — every `wt` call is made
-with `--no-hooks --no-cd`, and the plugin creates the session, switches the client, and
-tears things down itself.
+Under the hood it drives **native `git worktree`** directly — no external worktree
+tool, no config files, no hooks. The plugin creates each worktree, copies your
+gitignored files (`.env`, build caches) into it, builds the tmux session, switches
+the client, and tears everything down itself.
 
 ## Requirements
 
 - tmux **>= 3.2** (`display-popup`)
-- [worktrunk](https://worktrunk.dev) (`wt`) on `PATH`
-- `git`, `awk`, `sed` (standard)
+- `git` **>= 2.17** (`git worktree`)
+- `awk`, `sed`, `cp` (standard)
 - `fzf` — for the "open / switch" picker
 - your agent CLI (`claude`, `opencode`, ...) — for "new + agent"
 
-That's it. No `~/.config/worktrunk/config.toml`, no shell functions.
+That's it. No extra tool to install, no config files, no shell functions.
 
 ## Install
 
@@ -69,13 +69,13 @@ run-shell '~/code/tmux-bonsai/bonsai.tmux'
 | r | Promote the current window-worktree into its own session |
 | \| | Split the current pane **right** and launch the agent (same worktree) |
 | _ | Split the current pane **down** and launch the agent (same worktree) |
-| L | List all worktrees (`wt list --full`) |
+| L | List all worktrees (`git worktree list`) |
 | x | Remove the current worktree (auto-detects session vs window) |
 
 The "open / switch" picker handles all three navigation cases in one place: an existing
 worktree (jumps to its session), a local branch with no worktree yet, or a teammate's
-remote branch (worktrunk checks it out into a fresh worktree, then the plugin builds the
-session).
+remote branch (checked out into a fresh worktree as a local tracking branch, then the
+plugin builds the session).
 
 **Backing out returns to the menu.** Cancelling a popup action — ESC in the
 `o`/`O` picker, an empty prompt (just Enter) in `n`/`a`/`w`, or any key to close the
@@ -109,11 +109,14 @@ For richer, per-project layouts use a dedicated tool like
 
 | Step | Who does it |
 |------|-------------|
-| create branch + worktree, copy `.env`, remove | `wt` (`--no-hooks --no-cd`) |
+| create branch + worktree, copy `.env`, remove | `git worktree` + a tiny copy helper |
 | find the worktree path | `git worktree list --porcelain` |
 | create session, switch client, kill session/window | the plugin |
 
-So worktrunk never needs to know about tmux, and tmux never needs a worktrunk config file.
+New worktrees are created as siblings of the repo (`~/code/app` → `~/code/app.feature-x`),
+branched off the default branch. It's plain git underneath, so there's nothing extra to
+install and no config file to write. On `x`, the worktree is removed and its branch is
+deleted **only if it's already merged** (unmerged branches are kept).
 
 
 ## Companion: agent notifications & dashboard
