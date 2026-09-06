@@ -16,6 +16,13 @@ tmux display-menu -T "#[align=centre] bonsai " -- \
   "split pane right + agent" "|" "run-shell '$S/split.sh -h'" \
   "split pane down + agent" "_" "run-shell '$S/split.sh -v'" \
   "" \
+  "-#[align=centre]Agents" "" "" \
+  "agent board" d "display-popup -T ' bonsai agents ' -w 80% -h 80% -E '$S/board.sh'" \
+  "next agent needing input" j "run-shell -b '$S/next.sh'" \
+  "agent event feed" f "display-popup -T ' bonsai feed ' -w 80% -h 80% -E '$S/feed.sh | less -R'" \
+  "notification test" t "run-shell -b '$S/notify.sh test '#{pane_id}' test 'tmux-bonsai test'" \
+  "doctor" ? "display-popup -T ' bonsai doctor ' -w 70% -h 70% -E '$S/doctor.sh; printf \\"\\nPress enter\\"; read _'" \
+  "" \
   "list worktrees" L "run-shell -b '$S/launch.sh list.sh'" \
   "" \
   "-#[align=centre]Remove" "" "" \

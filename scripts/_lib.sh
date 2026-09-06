@@ -4,6 +4,44 @@
 
 wt_sanitize() { printf '%s' "$1" | sed 's#[/\\]#-#g'; }      # mirrors worktrunk's `sanitize`
 
+# Run tmux against the server which invoked a hook.  TMUX contains
+# "socket,pid,index"; using -S also makes delayed notification actions safe.
+tmx() {
+  local socket raw
+  raw=${TMUX-}; socket=${BONSAI_SOCKET:-${raw%%,*}}
+  if [ -n "$socket" ]; then
+    command tmux -S "$socket" "$@"
+  else
+    command tmux "$@"
+  fi
+}
+
+bonsai_dir() { CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd; }
+bonsai_state_dir() {
+  local d
+  d=$(tmx show-option -gqv @bonsai-state-dir 2>/dev/null || true)
+  printf '%s\n' "${d:-${XDG_STATE_HOME:-$HOME/.local/state}/tmux-bonsai}"
+}
+
+duration_seconds() {
+  case ${1:-0} in
+    *ms) awk -v n="${1%ms}" 'BEGIN { print n / 1000 }' ;;
+    *[smhd])
+      local n unit factor
+      n=${1%?}; unit=${1#"$n"}; factor=1
+      case $unit in m) factor=60;; h) factor=3600;; d) factor=86400;; esac
+      awk -v n="$n" -v f="$factor" 'BEGIN { print n * f }'
+      ;;
+    *) printf '%s\n' "${1:-0}" ;;
+  esac
+}
+
+tmux_at_least() {
+  local want have
+  want=$1; have=$(tmx -V | awk '{print $2}' | sed 's/[^0-9.].*//')
+  awk -v h="$have" -v w="$want" 'BEGIN { exit !((h + 0) >= (w + 0)) }'
+}
+
 # Signal launch.sh to re-open the bonsai menu, then exit cleanly. Used on cancel
 # (fzf abort / empty prompt / key-to-close) so backing out returns to the menu.
 wt_back() { tmux set-option -g @bonsai-back 1; exit 0; }

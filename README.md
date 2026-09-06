@@ -8,10 +8,8 @@ and launch an AI coding agent (Claude Code, opencode, …) right where the work 
 between tasks with a single `fzf` picker, and promote a scratch window into its own session.
 Like tending a bonsai: many small branches, each shaped deliberately, all in view at once.
 
-Want desktop alerts when an agent finishes or needs input, plus a live cross-session
-jump-board dashboard? Add the companion plugin
-[**tmux-agent-notify**](https://github.com/PedroLaRosa/tmux-agent-notify) — see
-[Companion](#companion-agent-notifications--dashboard).
+Desktop alerts and a live, cross-session agent board are built in. Bonsai can track
+Claude Code lifecycle hooks and hookless agents that expose state in their terminal title.
 
 Bring your own layout: bonsai never enforces one — shape each session with a separate
 plugin (tmuxinator, smug) or a tmux `session-created` hook (see [Layout](#layout)).
@@ -30,8 +28,9 @@ tears things down itself.
 - tmux **>= 3.2** (`display-popup`)
 - [worktrunk](https://worktrunk.dev) (`wt`) on `PATH`
 - `git`, `awk`, `sed` (standard)
-- `fzf` — for the "open / switch" picker
 - your agent CLI (`claude`, `opencode`, ...) — for "new + agent"
+- `jq` — for hook payloads and JSON output
+- `fzf >= 0.38` — for the agent board
 
 That's it. No `~/.config/worktrunk/config.toml`, no shell functions.
 
@@ -71,6 +70,10 @@ run-shell '~/code/tmux-bonsai/bonsai.tmux'
 | _ | Split the current pane **down** and launch the agent (same worktree) |
 | L | List all worktrees (`wt list --full`) |
 | x | Remove the current worktree (auto-detects session vs window) |
+| d | Live agent board (Enter jumps to the exact pane) |
+| j | Jump to the oldest agent that needs input |
+| f | Agent event feed |
+| t | Send a test notification |
 
 The "open / switch" picker handles all three navigation cases in one place: an existing
 worktree (jumps to its session), a local branch with no worktree yet, or a teammate's
@@ -116,20 +119,21 @@ For richer, per-project layouts use a dedicated tool like
 So worktrunk never needs to know about tmux, and tmux never needs a worktrunk config file.
 
 
-## Companion: agent notifications & dashboard
+## Agent notifications & dashboard
 
-Notifications and the cross-session jump-board dashboard live in a separate, optional
-plugin: [**tmux-agent-notify**](https://github.com/PedroLaRosa/tmux-agent-notify). Install
-it alongside bonsai to get:
+Run `scripts/bonsai hooks install` once to install managed Claude Code hooks. Bonsai then
+stores state directly on each tmux pane and provides:
 
 - **Desktop alerts** when an agent in any pane/session finishes (✅), needs input (💬), or
-  errors (❗) — wired into Claude Code and opencode with one command.
+  errors (❗) — wired into Claude Code with one command.
 - **A live jump-board dashboard** listing every open pane and every worktree, where one
   keypress jumps to the exact session / window / pane across the whole tmux server.
 
-It's fully standalone — it tracks agents by marking each pane with an `@agent_state` tmux
-option, so it works with or without bonsai. The two simply compose: create worktrees with
-bonsai, watch and jump to their agents with tmux-agent-notify.
+The command-line interface is scriptable: `bonsai list --json`, `bonsai mark %3 waiting`,
+`bonsai jump %3`, `bonsai next`, `bonsai feed`, and `bonsai doctor`. Configure notification
+delivery with tmux options such as `@bonsai-notify-backend`, `@bonsai-notify-focus`, and
+the per-category `@bonsai-notify-finished`, `@bonsai-notify-input`, and
+`@bonsai-notify-error` switches.
 
 ## Optional: key-table instead of a menu
 

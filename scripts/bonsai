@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -eu
+S=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+command=${1:-help}; [ "$#" -eq 0 ] || shift
+case $command in
+  mark) exec "$S/agent-event.sh" mark "${1:-${TMUX_PANE:-}}" "${2:-waiting}" "${3:-}" ;;
+  list) exec "$S/agent-list.sh" "$@" ;;
+  board) exec "$S/board.sh" "$@" ;;
+  jump) exec "$S/jump.sh" "$@" ;;
+  next) exec "$S/next.sh" "$@" ;;
+  feed) exec "$S/feed.sh" "$@" ;;
+  doctor) exec "$S/doctor.sh" "$@" ;;
+  notify) exec "$S/notify.sh" "$@" ;;
+  hooks) exec "$S/adapters/claude.sh" "$@" ;;
+  help|-h|--help) cat <<EOF
+usage: bonsai <command>
+  mark PANE STATE [MESSAGE]   set an agent pane state
+  list [--json|--counts]     list tracked panes
+  board                      open the agent board
+  jump PANE                  focus an exact pane
+  next                       focus the oldest pane needing input
+  feed                       show the event history
+  doctor                     diagnose dependencies and notification setup
+  hooks install|remove|status  manage Claude Code hooks
+EOF
+    ;;
+  *) printf 'bonsai: unknown command: %s\n' "$command" >&2; exit 2 ;;
+esac
