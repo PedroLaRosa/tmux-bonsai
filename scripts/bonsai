@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# tmux-bonsai — public CLI. Everything the menu does is a subcommand here, so
+# the two can never drift; notification click handlers and detached sleepers
+# call it too, which is why -S exists (they run with no $TMUX in the
+# environment and would otherwise talk to the default socket).
+set -uo pipefail
+
+BONSAI_SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd -P)"
+export BONSAI_SCRIPTS
+# shellcheck source=scripts/_lib.sh
+. "$BONSAI_SCRIPTS/_lib.sh"
+
+bonsai_usage() {
+  cat <<'USAGE'
+bonsai — cultivate parallel git worktrees and AI agents inside tmux
+
+usage: bonsai [-S <socket>] [--json] <command> [args]
+
+agents
+  list [--json|--rows|--counts] [--all]   agent inventory (rows feed the board)
+  board [--watch] [--compact]             fzf agent board (popup / window / side pane)
+  feed [--tail] [--json]                  activity + notification-decision log
+  jump <pane|@next>                       switch to a pane, raising the terminal
+  next                                    jump to the next agent that needs you
+  ack <pane>                              mark seen        unread <pane>   mark unseen
+  reply <pane> <text> [--yes]             type a line into an agent
+  mark <pane> <state>                     set state by hand (working|waiting|done|error|clear)
+  kill <pane> [--pane]                    interrupt an agent, optionally close the pane
+  resume <pane>                           relaunch an exited agent in its pane
+  capture <pane> [-S -200]                print a pane's recent output
+
+notifications
+  notify test|status|deliver <pane> <category>
+  open-settings                           open the OS notification settings
+  hooks install|status|remove|explain [agent...]
+  settings get|set|list|reset             persisted @bonsai-* options
+  doctor [--json]                         diagnose the whole pipeline
+
+worktrees
+  new|window|switch|window-switch|promote|remove|worktrees
+  spawn --branch <b> [--window] [--agent claude] [--prompt <text>]
+  fanout --branches a,b,c --prompt-file task.md
+  wait --pane <id>|--branch <b> --for done|waiting|idle|exited [--timeout 600]
+  send --to <pane>|@waiting|@idle|@all|@branch:<b> <text> [--yes]
+
+  menu | status | version | help
+USAGE
+}
+
+# ------------------------------------------------------------- global flags
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -S)         [ $# -ge 2 ] || { echo "bonsai: -S needs a socket path" >&2; exit 2; }
+                BONSAI_SOCKET="$2"; export BONSAI_SOCKET; shift 2 ;;
+    -S*)        BONSAI_SOCKET="${1#-S}"; export BONSAI_SOCKET; shift ;;
+    --socket=*) BONSAI_SOCKET="${1#--socket=}"; export BONSAI_SOCKET; shift ;;
+    --json)     BONSAI_JSON=1; export BONSAI_JSON; shift ;;
+    -h|--help)  bonsai_usage; exit 0 ;;
+    -V|--version) printf 'tmux-bonsai %s\n' "$(bs_opt @bonsai-version dev)"; exit 0 ;;
+    --)         shift; break ;;
+    -*)         echo "bonsai: unknown global flag '$1'" >&2; bonsai_usage >&2; exit 2 ;;
+    *)          break ;;
+  esac
+done
+
+cmd="${1:-help}"
+[ $# -gt 0 ] && shift
+
+# Subcommand -> script. An explicit table (rather than interpolating the
+# subcommand into a path) keeps `bonsai ../../evil` from resolving to anything.
+case "$cmd" in
+  help|'')        bonsai_usage; exit 0 ;;
+  version)        printf 'tmux-bonsai %s\n' "$(bs_opt @bonsai-version dev)"; exit 0 ;;
+
+  list)           script=list.sh ;;
+  board)          script=board.sh ;;
+  feed)           script=feed.sh ;;
+  jump)           script=jump.sh ;;
+  next)           script=next.sh ;;
+  ack)            script=ack.sh ;;
+  unread)         script=ack.sh; set -- --unread "$@" ;;
+  reply)          script=reply.sh ;;
+  mark)           script=mark.sh ;;
+  kill)           script=kill.sh ;;
+  resume)         script=resume.sh ;;
+  capture)        script=capture.sh ;;
+  wait)           script=wait.sh ;;
+  send)           script=send.sh ;;
+  spawn)          script=spawn.sh ;;
+  fanout)         script=fanout.sh ;;
+
+  notify)         script=notify.sh ;;
+  open-settings)  script=open-settings.sh ;;
+  hooks)          script=hooks.sh ;;
+  settings)       script=settings.sh ;;
+  doctor)         script=doctor.sh ;;
+  status)         script=status.sh ;;
+  clear-markers)  script=clear-markers.sh ;;
+
+  menu)           script=menu.sh ;;
+  new)            script=new.sh ;;
+  window)         script=window.sh ;;
+  switch)         script=switch.sh ;;
+  window-switch)  script=window-switch.sh ;;
+  promote)        script=promote.sh ;;
+  remove)         script=remove.sh ;;
+  worktrees)      script=worktrees.sh ;;
+  split)          script=split.sh ;;
+
+  # internal: the reducer and the tmux-hook entry points
+  event)          script=agent-event.sh ;;
+  title)          script=title.sh ;;
+  focus)          script=focus.sh ;;
+
+  *)
+    printf 'bonsai: unknown command %s\n\n' "$cmd" >&2
+    bonsai_usage >&2
+    exit 2 ;;
+esac
+
+target="$BONSAI_SCRIPTS/$script"
+if [ ! -x "$target" ]; then
+  if [ -f "$target" ]; then
+    exec bash "$target" "$@"
+  fi
+  printf 'bonsai: %s is missing (plugin install incomplete?)\n' "$script" >&2
+  exit 127
+fi
+exec "$target" "$@"

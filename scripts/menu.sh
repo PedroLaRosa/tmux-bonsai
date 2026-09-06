@@ -16,7 +16,7 @@ tmux display-menu -T "#[align=centre] bonsai " -- \
   "split pane right + agent" "|" "run-shell '$S/split.sh -h'" \
   "split pane down + agent" "_" "run-shell '$S/split.sh -v'" \
   "" \
-  "list worktrees" L "run-shell -b '$S/launch.sh list.sh'" \
+  "list worktrees" L "run-shell -b '$S/launch.sh worktrees.sh'" \
   "" \
   "-#[align=centre]Remove" "" "" \
   "remove current worktree" x "confirm-before -p 'remove this worktree? (y/n) ' \"run-shell '$S/remove.sh'\""

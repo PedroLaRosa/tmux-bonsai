@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tmux jq fzf shellcheck bats
+
+      - name: Install dependencies (macos)
+        if: runner.os == 'macOS'
+        run: brew install tmux jq fzf shellcheck bats-core
+
+      - name: Versions
+        run: |
+          tmux -V; jq --version; fzf --version; bats --version; shellcheck --version | head -3
+          bash --version | head -1
+
+      - name: Syntax and lint
+        run: |
+          tests/run.sh syntax
+          tests/run.sh lint
+
+      # No desktop notification daemon exists on a CI runner, so the suite
+      # forces the `command` backend and asserts on what it was asked to send.
+      - name: Tests
+        env:
+          BONSAI_TEST_BACKEND: command
+        run: tests/run.sh
