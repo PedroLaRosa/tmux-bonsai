@@ -1,0 +1,19 @@
+name: shell checks
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tmux jq fzf shellcheck
+      - if: runner.os == 'macOS'
+        run: brew install tmux jq fzf shellcheck
+      - name: Syntax and portability
+        run: |
+          find scripts tests -type f \( -name '*.sh' -o -name bonsai \) -exec bash -n {} \;
+          shellcheck -S warning -e SC1090,SC1091 scripts/*.sh scripts/bonsai scripts/hooks/*.sh scripts/adapters/*.sh bonsai.tmux install.sh
+      - run: bash tests/run.sh

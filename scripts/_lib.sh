@@ -2,6 +2,65 @@
 # Shared helpers. The plugin does all tmux work itself, so it never relies on
 # worktrunk hooks; every `wt` call below uses --no-hooks --no-cd.
 
+BONSAI_SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export BONSAI_SCRIPTS
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
+
+tmx() {
+  local socket="${BONSAI_SOCKET:-${TMUX:-}}"
+  socket=${socket%%,*}
+  if [ -n "$socket" ]; then command tmux -S "$socket" "$@"; else command tmux "$@"; fi
+}
+bonsai_opt() {
+  local value
+  value=$(tmx show-option -gqv "$1" 2>/dev/null) || value=''
+  printf '%s' "${value:-${2:-}}"
+}
+bonsai_state_dir() {
+  bonsai_opt @bonsai-state-dir "${XDG_STATE_HOME:-$HOME/.local/state}/tmux-bonsai"
+}
+bonsai_config_dir() {
+  bonsai_opt @bonsai-config-dir "${XDG_CONFIG_HOME:-$HOME/.config}/tmux-bonsai"
+}
+bonsai_duration() {
+  awk -v v="$1" 'BEGIN {
+    if (v !~ /^[0-9]+([.][0-9]+)?[smh]?$/) exit 1;
+    m=1; if (v ~ /m$/) m=60; if (v ~ /h$/) m=3600;
+    sub(/[smh]$/, "", v); printf "%g\n", v*m
+  }'
+}
+bonsai_tmux_at_least() {
+  local version
+  version=$(tmx -V 2>/dev/null)
+  awk -v actual="${version#tmux }" -v required="$1" 'BEGIN {
+    split(actual,a,"."); split(required,r,".");
+    exit !(a[1]+0>r[1]+0 || (a[1]+0==r[1]+0 && a[2]+0>=r[2]+0))
+  }'
+}
+tmux_at_least() { bonsai_tmux_at_least "$@"; }
+bonsai_shell_quote() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
+bonsai_detach() {
+  if command -v setsid >/dev/null 2>&1; then
+    setsid "$@" </dev/null >/dev/null 2>&1 &
+  else
+    nohup "$@" </dev/null >/dev/null 2>&1 &
+  fi
+}
+bonsai_glyph() {
+  local glyphs="${BONSAI_GLYPHS:-}"
+  [ -n "$glyphs" ] || glyphs=$(bonsai_opt @bonsai-glyphs unicode)
+  case "$glyphs:$1" in
+    ascii:waiting) printf '[!]' ;; ascii:working) printf '[~]' ;; ascii:done) printf '[+]' ;;
+    ascii:idle) printf '[.]' ;; ascii:error) printf '[x]' ;; ascii:stopped) printf '[-]' ;;
+    ascii:exited) printf '[z]' ;; ascii:*) printf '[?]' ;;
+    emoji:waiting) printf '💬' ;; emoji:working) printf '🔄' ;; emoji:done) printf '✅' ;;
+    emoji:idle) printf '✓' ;; emoji:error) printf '❗' ;; emoji:stopped) printf '⛔' ;;
+    emoji:exited) printf '💤' ;; emoji:*) printf '❔' ;;
+    *:waiting) printf '●' ;; *:working) printf '◐' ;; *:done) printf '✔' ;; *:idle) printf '·' ;;
+    *:error) printf '✖' ;; *:stopped) printf '■' ;; *:exited) printf '○' ;; *) printf '?' ;;
+  esac
+}
+
 wt_sanitize() { printf '%s' "$1" | sed 's#[/\\]#-#g'; }      # mirrors worktrunk's `sanitize`
 
 # Signal launch.sh to re-open the bonsai menu, then exit cleanly. Used on cancel
