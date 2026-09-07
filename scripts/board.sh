@@ -10,19 +10,26 @@ mkdir -p "$ports" "$views"
 self=$(printf '%q' "$BONSAI_SCRIPTS/board.sh")
 # A board owns its view preferences and port registration, even with many clients.
 board_header() {
- local counts waiting errors working done_unseen rest compact=off all sort
+ local counts waiting errors working done_unseen idle compact=off all sort idle_after now
  local BONSAI_GLYPHS
  BONSAI_GLYPHS=$(bonsai_opt @bonsai-glyphs unicode)
  export BONSAI_GLYPHS
  if [ -n "${1:-}" ] && [ -f "$views/$1" ]; then read -r all sort compact < "$views/$1"; fi
- counts=$(tmx list-panes -a -F '#{@agent_type} #{@agent_state} #{@agent_state_ts} #{@agent_seen_ts}' 2>/dev/null | awk '
-  $1!="" && $2=="waiting" {w++} $2=="error" {e++} $2=="working" {r++} $2=="done" && $3+0>$4+0 {d++}
-  END {printf "%d %d %d %d",w,e,r,d}')
- read -r waiting errors working done_unseen rest <<< "$counts"
- printf '%s %s needs you · %s %s · %s %s working · %s %s done\n' "$(bonsai_glyph waiting)" "$waiting" "$(bonsai_glyph error)" "$errors" "$(bonsai_glyph working)" "$working" "$(bonsai_glyph 'done')" "$done_unseen"
- if [ "$compact" = on ]; then printf 'enter jump · ^r reply · ? help'; return; fi
- printf 'enter jump · ^r reply · ^y yes · ^u unread · ^x kill · ^e resume · ^n/^b needs you · ^a all · ^l sort · ? help'
+ idle_after=$(bonsai_duration "$(bonsai_opt @bonsai-idle-after 30m)")
+ now=$(date +%s)
+ counts=$(tmx list-panes -a -F '#{@agent_type} #{@agent_state} #{@agent_state_ts} #{@agent_seen_ts}' 2>/dev/null | awk -v now="$now" -v idle_after="$idle_after" '
+  $1!="" && $2=="waiting" {w++} $2=="error" {e++} $2=="working" {r++} $2=="idle" || ($2=="done" && now-$3>idle_after) {i++}
+  $2=="done" && now-$3<=idle_after && $3+0>$4+0 {d++}
+  END {printf "%d %d %d %d %d",w,e,r,d,i}')
+ read -r waiting errors working done_unseen idle <<< "$counts"
+ printf '%s %s needs you · %s %s · %s %s working · %s %s done · %s idle\n' "$(bonsai_glyph waiting)" "$waiting" "$(bonsai_glyph error)" "$errors" "$(bonsai_glyph working)" "$working" "$(bonsai_glyph 'done')" "$done_unseen" "$idle"
+ if [ "$compact" = on ]; then printf 'enter jump · ^r reply · ? help'
+ else printf 'enter jump · ^r reply · ^y yes · ^u unread · ^x kill · ^e resume · ^n/^b needs you · ^a all · ^l sort · ? help'; fi
  if [ "$(bonsai_opt @bonsai-notify on)" = on ] && ! bonsai_verification_current; then printf '\n! notifications unverified'; fi
+}
+search_options() {
+ if [ "$1" = on ]; then search_args=(--with-nth '3,5,7' --nth '2..3')
+ else search_args=(--with-nth '3..7' --nth '2..5'); fi
 }
 view_rows() {
  local view=${1:-} all=off sort=state compact=off
@@ -60,7 +67,10 @@ case "${1:-}" in
   printf '%s %s %s\n' "$all" "$sort" "$compact" > "$views/$pid"; exit;;
  --navigate)
   pid=${2:-}; direction=${3:-next}; current=${4:-}; query=${5:-}
-  action=$(view_rows "$pid" | fzf --filter "$query" --no-sort --ansi --delimiter $'\037' --nth '4..7' | awk -F '\037' -v current="$current" -v direction="$direction" '
+  all=off sort=state compact=off
+  [ ! -f "$views/$pid" ] || read -r all sort compact < "$views/$pid"
+  search_options "$compact"
+  action=$(view_rows "$pid" | fzf --filter "$query" --no-sort --ansi --delimiter $'\037' "${search_args[@]}" | awk -F '\037' -v current="$current" -v direction="$direction" '
    $1==current {selected=NR} $2 ~ /^\[0,/ {positions[++n]=NR}
    END {if(!n) exit; result=positions[1];
     if(direction=="previous") {result=positions[n]; for(i=n;i>0;i--) if(positions[i]<selected){result=positions[i];break}}
@@ -148,7 +158,8 @@ reload="$self --rows --view $$"
 script() { printf '%q' "$BONSAI_SCRIPTS/$1"; }
 header=$(board_header "$$")
 us=$'\037'
-args=(--ansi --delimiter "$us" --with-nth '3..7' --nth '4..7' --layout reverse --no-sort --header "$header" --prompt 'agents> ')
+search_options "$compact"
+args=(--ansi --delimiter "$us" "${search_args[@]}" --layout reverse --no-sort --header "$header" --prompt 'agents> ')
 args+=(--bind "ctrl-r:execute($(script reply.sh) {1})+reload($reload)")
 args+=(--bind "ctrl-y:execute($(script reply.sh) {1} y --waiting-only)+reload($reload)")
 args+=(--bind "ctrl-u:execute-silent($self --unread {1})+reload($reload)")
@@ -159,7 +170,7 @@ args+=(--bind "ctrl-l:execute-silent($self --cycle-sort $$)+reload($reload)")
 args+=(--bind "ctrl-n:execute-silent($self --navigate $$ next {1} {q}),ctrl-b:execute-silent($self --navigate $$ previous {1} {q})")
 args+=(--bind "ctrl-o:execute-silent($(script notify-menu.sh)),?:execute($self --help --pause)")
 if [ "$compact" = on ]; then
- args+=(--with-nth '3,5,7' --header 'enter jump · ^r reply · ? help' --no-info)
+ args+=(--no-info)
 else args+=(--preview "$self --preview {1}" --preview-window 'right:55%:wrap' --bind 'ctrl-p:toggle-preview'); fi
 version=$(fzf --version | awk '{split($1,v,".");print v[1]*100+v[2]}')
 if [ "${version:-0}" -ge 38 ]; then args+=(--track); fi

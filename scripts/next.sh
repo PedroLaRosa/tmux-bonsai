@@ -8,9 +8,11 @@ if [ -z "$candidates" ]; then
  tmx display-message "bonsai: nothing needs you · $working working"; exit 0
 fi
 cursor="$(bonsai_state_dir)/next-cursor-$(bonsai_server_key)"
-previous=''; [ ! -f "$cursor" ] || IFS='' read -r previous < "$cursor"
-target=$(printf '%s\n' "$candidates" | awk -v previous="$previous" 'NR==1 {first=$0} found {print; exit} $0==previous {found=1} END {if(!found || $0==previous) print first}')
-# On the last row, wrap exactly once.
-target=${target%%$'\n'*}
-printf '%s\n' "$target" > "$cursor"
+pending=''; [ ! -f "$cursor" ] || IFS='' read -r pending < "$cursor"
+# Remember the successor before jumping: acknowledgement removes a done row
+# from the next snapshot and must not send the cycle back to its first row.
+read -r target successor <<< "$(printf '%s\n' "$candidates" | awk -v pending="$pending" '
+ {rows[++n]=$0; if($0==pending) wanted=n}
+ END {i=wanted?wanted:1; print rows[i],rows[i%n+1]}')"
+printf '%s\n' "$successor" > "$cursor"
 exec "$BONSAI_SCRIPTS/jump.sh" "$target"

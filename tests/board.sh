@@ -61,6 +61,12 @@ tmx set -w -t "$p1" @agent_state waiting
 assert_eq '2 0 0 1 1 0 0 0' "$("$BONSAI_SCRIPTS/list.sh" --counts)" 'window mirror ignored on shell sibling'
 assert_contains "$("$BONSAI_SCRIPTS/status.sh")" '●2'
 assert_contains "$("$BONSAI_SCRIPTS/board.sh" --header)" '2 needs you'
+# Waiting on that shell must not accept the inherited window marker.
+set +e
+"$BONSAI_SCRIPTS/wait.sh" --pane "$sibling" --for waiting --timeout 0 > "$TMP/sibling-wait" 2>&1
+sibling_status=$?
+set -e
+assert_eq 124 "$sibling_status" 'shell mirror is not an agent state'
 tmx kill-pane -t "$sibling"
 # A complete state is exposed to scripts; timeout is distinguishable from errors.
 assert_contains "$("$BONSAI_SCRIPTS/wait.sh" --pane "$p3" --for 'done' --timeout 0)" "$p3 done"
@@ -193,3 +199,62 @@ assert_eq '-b com.googlecode.iterm2' "$(cat "$TMP/jump-open")"
 unset -f open uname
 tmx set -g @bonsai-terminal auto
 tmx kill-pane -t "$feed_pane"
+
+# Use the real board's fzf invocation in filter mode: --nth is evaluated after
+# --with-nth, so these searches used to fail despite matching the source rows.
+search_pane=$(test_pane "$TMP/worker-one")
+tmx set -p -t "$search_pane" @agent_type needle-agent \; set -p -t "$search_pane" @agent_state idle \; set -p -t "$search_pane" @agent_msg needle-preview
+open() { :; }
+export -f open
+if command -v fzf >/dev/null; then
+ for query in needle-agent board-worker-one; do
+  tmx set -p -t "$search_pane" @agent_seen_ts 0
+  FZF_DEFAULT_OPTS="--filter=$query" WINDOWID='' "$BONSAI_SCRIPTS/board.sh" --watch
+  [ "$(tmx show-option -pqv -t "$search_pane" @agent_seen_ts)" -gt 0 ] || { echo "full board search failed: $query" >&2; exit 1; }
+ done
+ for query in board-worker-one needle-preview; do
+  tmx set -p -t "$search_pane" @agent_seen_ts 0
+  FZF_DEFAULT_OPTS="--filter=$query" WINDOWID='' "$BONSAI_SCRIPTS/board.sh" --watch --compact
+  [ "$(tmx show-option -pqv -t "$search_pane" @agent_seen_ts)" -gt 0 ] || { echo "compact board search failed: $query" >&2; exit 1; }
+ done
+fi
+assert_contains "$("$BONSAI_SCRIPTS/board.sh" --header)" '1 idle'
+if command -v fzf >/dev/null && command -v curl >/dev/null; then
+ tmx set -g @bonsai-notify on \; set -g @bonsai-notify-backend none
+ board_command=$(printf '%q ' "$BONSAI_SCRIPTS/board.sh" --watch --compact)
+ board_pane=$(tmx new-window -d -P -F '#{pane_id}' "$board_command")
+ sleep 0.5
+ compact_capture=$(tmx capture-pane -p -t "$board_pane")
+ assert_contains "$compact_capture" '1 idle'
+ assert_contains "$compact_capture" 'notifications unverified'
+ tmx kill-pane -t "$board_pane"
+ tmx set -g @bonsai-notify off
+fi
+
+# Feed waiting rows retain the pending question, branch and configured glyph.
+tmx set -p -t "$search_pane" @agent_state waiting \; set -p -t "$search_pane" @agent_ask 'Which database?' \; set -p -t "$search_pane" @agent_msg '' \; set -g @bonsai-glyphs ascii
+bonsai_log "$search_pane" PermissionRequest working waiting input cooldown command pending-question
+question_rows=$("$BONSAI_SCRIPTS/feed.sh" --rows --why)
+assert_contains "$question_rows" 'Which database?'
+assert_contains "$question_rows" 'board-worker-one'
+assert_contains "$question_rows" '[!]'
+tmx set -g @bonsai-glyphs unicode
+tmx kill-pane -t "$search_pane"
+
+# Acknowledging done removes that row. Remember its successor so waiting rows
+# are not revisited before every pending completion has been visited once.
+cycle_one=$(test_pane); cycle_two=$(test_pane); cycle_three=$(test_pane); cycle_four=$(test_pane)
+now=$(date +%s)
+for pane in "$cycle_one" "$cycle_two" "$cycle_three" "$cycle_four"; do
+ tmx set -p -t "$pane" @agent_type claude \; set -p -t "$pane" @agent_seen_ts 0
+done
+tmx set -p -t "$cycle_one" @agent_state waiting \; set -p -t "$cycle_one" @agent_state_ts "$((now-30))"
+tmx set -p -t "$cycle_two" @agent_state waiting \; set -p -t "$cycle_two" @agent_state_ts "$((now-20))"
+tmx set -p -t "$cycle_three" @agent_state 'done' \; set -p -t "$cycle_three" @agent_state_ts "$((now-1))"
+tmx set -p -t "$cycle_four" @agent_state 'done' \; set -p -t "$cycle_four" @agent_state_ts "$((now-2))"
+for expected in "$cycle_one" "$cycle_two" "$cycle_three" "$cycle_four"; do
+ WINDOWID='' "$BONSAI_SCRIPTS/next.sh"
+ [ "$(tmx show-option -pqv -t "$expected" @agent_seen_ts)" -gt 0 ] || { echo "next did not visit $expected in order" >&2; exit 1; }
+done
+unset -f open
+for pane in "$cycle_one" "$cycle_two" "$cycle_three" "$cycle_four"; do tmx kill-pane -t "$pane"; done
