@@ -26,7 +26,8 @@ previous=$(bonsai_snapshot "$pane") || exit 0
 [ -n "$previous" ] || exit 0
 prev=$(printf '%s' "$previous" | jq -r .state)
 seq=$(printf '%s' "$previous" | jq -r .seq)
-source_seq=${BONSAI_EVENT_SEQ:-$(printf '%s' "$payload" | jq -r '.bonsai_seq // .seq // 0')}
+source_seq=$(printf '%s' "$payload" | jq -r '.bonsai_seq // .seq // empty')
+[ -n "$source_seq" ] || source_seq=${BONSAI_EVENT_SEQ:-0}
 case "$source_seq" in ''|*[!0-9]*) source_seq=0 ;; esac
 old_source_seq=$(printf '%s' "$previous" | jq -r .source_seq)
 if [ "$source_seq" -gt 0 ] && [ "$source_seq" -le "$old_source_seq" ]; then exit 0; fi
@@ -63,15 +64,23 @@ while IFS=$'\t' read -r key value; do
   case "$value" in *';') value="${value%;}\\;" ;; esac
   [ "${#writes[@]}" -eq 0 ] || writes+=( ';' )
   writes+=( set-option -p -t "$pane" "@agent_${key}" "$value" )
-done < <(printf '%s' "$next" | jq -r 'to_entries[] | select(.key | test("^(state|state_ts|seq|type|prompt|msg|ask|tool|session|transcript|seen_ts|title_state|title_ts|hook_ts|children|child_ids|parent_done|source_seq|model|ctx)$")) | [.key, (.value | if type == "string" then . elif . == null then "" else tojson end)] | join("\t")')
+done < <(printf '%s' "$next" | jq -r 'to_entries[] | select(.key | test("^(state|state_ts|seq|generation|type|prompt|msg|ask|tool|session|transcript|seen_ts|title_state|title_ts|hook_ts|hook_mode|children|child_ids|parent_done|source_seq|model|ctx)$")) | [.key, (.value | if type == "string" then . elif . == null then "" else tojson end)] | join("\t")')
+window=$(printf '%s' "$previous" | jq -r .window_id)
+window_lock="bonsai-window-${window}"
+tmx wait-for -L "$window_lock" 2>/dev/null || exit 0
+trap 'tmx wait-for -U "$window_lock" >/dev/null 2>&1 || true; tmx wait-for -U "$lock" >/dev/null 2>&1 || true' EXIT
+mirror=$(bonsai_window_severity "$window" "$pane" "$state")
+writes+=( ';' set-option -w -t "$window" @agent_state "$mirror" )
 tmx "${writes[@]}" 2>/dev/null || exit 0
-bonsai_window_mirror "$pane"
+tmx wait-for -U "$window_lock" 2>/dev/null || true
+trap 'tmx wait-for -U "$lock" >/dev/null 2>&1 || true' EXIT
 if [ "$state" != "$prev" ] || [ -n "$category" ]; then bonsai_log "$pane" "$event" "$prev" "$state"; fi
 tmx refresh-client -S 2>/dev/null || true
 # Release the pane before acknowledgement/notification workers may request it.
 tmx wait-for -U "$lock" 2>/dev/null || true
 trap - EXIT
 if [ -n "$category" ] && [ -x "$BONSAI_SCRIPTS/notify.sh" ]; then
-  bonsai_detach "$BONSAI_SCRIPTS/notify.sh" deliver "$pane" "$category"
+  generation=$(printf '%s' "$next" | jq -r .generation)
+  bonsai_detach "$BONSAI_SCRIPTS/notify.sh" deliver "$pane" "$category" --generation "$generation"
 fi
 if [ -x "$BONSAI_SCRIPTS/board.sh" ]; then bonsai_detach "$BONSAI_SCRIPTS/board.sh" --refresh; fi

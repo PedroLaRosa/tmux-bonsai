@@ -9,5 +9,5 @@ path=$(wt_path_of "$branch"); wt_copy_ignored "$path"
 S=$(wt_ensure_session "$branch" "$path")
 tmux switch-client -t "$S"
 if [ "$mode" = agent ]; then
-  tmux send-keys -t "$S" "$(wt_agent)" Enter
+  wt_launch_agent "$S"
 fi

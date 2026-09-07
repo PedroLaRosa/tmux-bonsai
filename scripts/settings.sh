@@ -65,6 +65,12 @@ quote_tmux() {
   value=${value//\\/\\\\}; value=${value//\"/\\\"}; value=${value//\$/\\\$}; value=${value//\`/\\\`}
   printf '"%s"' "$value"
 }
+remember() {
+  local previous next
+  previous=$(tmx show-option -gqv @bonsai-applied); previous=${previous:-\{\}}
+  next=$(printf '%s' "$previous" | jq -c --arg key "$1" --arg value "$2" '.[$key]=$value')
+  tmx set -g @bonsai-applied "$next"
+}
 persist() {
   local option=$1 value=$2 mode=${3:-set} dir file tmp
   dir=$(bonsai_config_dir); mkdir -p "$dir"
@@ -84,30 +90,55 @@ case "${1:-list}" in
     if [ "$(tmx show-option -gqv @bonsai-initialized)" != 1 ]; then
       pinned=$(tmx show-options -g | awk '$1 ~ /^@bonsai-/ {printf "%s ",$1}')
       tmx set -g @bonsai-pinned "$pinned" \; set -g @bonsai-initialized 1
+    else
+      # Settings changes update this baseline. Direct tmux.conf changes do not,
+      # so a newly configured option becomes pinned on the next plugin reload.
+      applied=$(tmx show-option -gqv @bonsai-applied)
+      if [ -n "$applied" ]; then
+        while IFS='|' read -r key value; do
+          option="@bonsai-$key"
+          previous=$(printf '%s' "$applied" | jq -r --arg key "$option" '.[$key] // empty')
+          current=$(tmx show-option -gqv "$option")
+          if [ "$current" != "$previous" ]; then
+            case " $pinned " in *" $option "*) ;; *) pinned="$pinned $option ";; esac
+          fi
+        done < <(defaults)
+        tmx set -g @bonsai-pinned "$pinned"
+      fi
     fi
     file="$(bonsai_config_dir)/settings.tmux"
     if [ -f "$file" ]; then
       tmp=$(mktemp "${TMPDIR:-/tmp}/bonsai-settings.XXXXXX")
-      awk -v pinned=" $pinned " '$1=="set" && $2=="-g" && $3 ~ /^@bonsai-/ && !index(pinned," "$3" ")' "$file" > "$tmp"
+      awk -v pinned=" $pinned " '$1=="set" && $2=="-g" && (($3 ~ /^@bonsai-/ && !index(pinned," "$3" ")) || ($3=="focus-events" && ($4=="on" || $4=="\"on\"")) || ($3=="allow-passthrough" && ($4=="all" || $4=="\"all\"")))' "$file" > "$tmp"
       tmx source-file "$tmp"; rm -f "$tmp"
     fi
     while IFS='|' read -r key value; do
       current=$(tmx show-option -gqv "@bonsai-$key")
       [ -n "$current" ] || tmx set -g "@bonsai-$key" "$value"
+      remember "@bonsai-$key" "${current:-$value}"
     done < <(defaults)
     ;;
   list)
     tmx show-options -g | awk '$1 ~ /^@bonsai-/';;
   get) bonsai_opt "$(normalize "${2:?setting required}")"; printf '\n';;
   set)
-    option=$(normalize "${2:?setting required}"); value=${3:?value required}
+    option=$(normalize "${2:?setting required}")
+    [ $# -ge 3 ] || { echo 'value required (use an empty quoted string to clear)' >&2; exit 2; }
+    value=$3
     validate "$option" "$value" || { echo "Invalid setting/value: $option" >&2; exit 2; }
-    persist "$option" "$value"; tmx set -g "$option" "$value"
+    persist "$option" "$value"
+    runtime_value=$value
+    case "$runtime_value" in *';') runtime_value="${runtime_value%;}\\;";; esac
+    tmx set -g "$option" "$runtime_value"
+    remember "$option" "$value"
     tmx refresh-client -S 2>/dev/null || true
     ;;
   reset)
     option=$(normalize "${2:?setting required}")
     value=$(defaults | awk -F '|' -v key="${option#@bonsai-}" '$1==key {print $2; found=1} END {exit !found}')
-    persist "$option" '' reset; tmx set -g "$option" "$value";;
+    persist "$option" '' reset; tmx set -g "$option" "$value"; remember "$option" "$value";;
+  prerequisite)
+    case "${2:-}:${3:-}" in focus-events:on|allow-passthrough:all) ;; *) exit 2;; esac
+    persist "$2" "$3"; tmx set -g "$2" "$3";;
   *) echo 'Usage: bonsai settings get|set|list|reset [name] [value]' >&2; exit 2;;
 esac

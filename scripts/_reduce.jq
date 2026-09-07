@@ -31,6 +31,7 @@ $payload as $raw |
 ._ignore=false | ._boundary=false | ._reminder=false |
 if $agent != "title" and $agent != "manual" and $agent != "process" then
   .type=$agent |
+  .hook_mode=(if $event == "agent-turn-complete" and ($old.type != $agent or .hook_mode != "native") then "notify" else "native" end) |
   .session=($raw.root_session_id // $raw.session_id // $p.session_id // $p["session-id"] // $p.rootSessionID // .session) |
   .transcript=($p.transcript_path // .transcript)
 else . end |
@@ -45,7 +46,9 @@ if $agent == "title" then
     .title_state=$p.classification |
     if .title_state != $old.title_state then .title_ts=$now else . end |
     if .type == "" then .type=($p.agent // "") else . end |
-    if .hook_ts == 0 or .type == "codex" then
+    if .type == "gemini" and .title_state == "permission" then
+      .state="waiting" | .ask="Permission requested"
+    elif .hook_ts == 0 or .hook_mode == "notify" then
       if .title_state == "working" then .state="working" | .parent_done=null
       elif .title_state == "permission" then .state="waiting" | .ask="Permission requested"
       elif .title_state == "idle" and .state == "working" then .state="done"
@@ -59,7 +62,10 @@ elif $agent == "manual" or $agent == "process" then
     .ask=($p.ask // .ask) | .type=($p.agent // (if .type == "" then "manual" else .type end))
   else ._ignore=true end
 elif $agent == "opencode" then
-  if $event == "session.created" then
+  .prompt=($raw.prompt // .prompt) | .msg=($raw.last_assistant_message // .msg) |
+  if $event == "SubagentStart" then child_start($p.agent_id // "")
+  elif $event == "SubagentStop" then child_stop($p.agent_id // "")
+  elif $event == "session.created" then
     if ($info.parentID // "") != "" then ._ignore=true
     else .state="idle" | ._boundary=true | .session=($info.id // .session) end
   elif ($p.bonsai_child // false) then
@@ -125,7 +131,11 @@ if .state != "waiting" then .ask="" else . end |
 if .state != $old.state then .state_ts=$now |
   if ._boundary | not then .seen_ts=([.seen_ts, $now - 1] | min) else . end
 else . end |
-if $agent != "title" and $agent != "manual" and $agent != "process" and (._ignore | not) then .hook_ts=$now else . end |
+if .state != $old.state or ._boundary or (["UserPromptSubmit","BeforeAgent","beforeSubmitPrompt"] | index($event)) != null then
+  .generation=($old.generation + 1)
+else . end |
+if $agent != "title" and $agent != "manual" and $agent != "process" and (._ignore | not) and
+   (["StatusLine","afterAgentResponse","message.part.updated","message.updated"] | index($event)) == null then .hook_ts=$now else . end |
 ._category=(if ._boundary or ._ignore then ""
   elif ._reminder then (if .state == "waiting" then "input" else "finished" end)
   elif .state == $old.state then ""
@@ -134,4 +144,7 @@ if $agent != "title" and $agent != "manual" and $agent != "process" and (._ignor
   elif .state == "done" or .state == "stopped" then "finished"
   else "" end) |
 .prompt |= clean(160) | .msg |= clean(240) | .ask |= clean(160) | .tool |= clean(120) |
-.session |= clean(512) | .transcript |= clean(4096) | .type |= clean(40)
+.session |= clean(512) | .transcript |= clean(4096) | .type |= clean(40) |
+if .parent_done != null then .parent_done.msg |= clean(240) else . end |
+if has("model") then .model |= clean(80) else . end |
+if has("ctx") then .ctx |= clean(8) else . end

@@ -11,6 +11,12 @@ tmx() {
   socket=${socket%%,*}
   if [ -n "$socket" ]; then command tmux -S "$socket" "$@"; else command tmux "$@"; fi
 }
+bonsai_server_key() {
+  local socket="${BONSAI_SOCKET:-${TMUX:-default}}"
+  local checksum
+  checksum=$(printf '%s' "${socket%%,*}" | cksum)
+  printf '%s' "${checksum%% *}"
+}
 bonsai_opt() {
   local value
   value=$(tmx show-option -gqv "$1" 2>/dev/null) || value=''
@@ -39,6 +45,17 @@ bonsai_tmux_at_least() {
 }
 tmux_at_least() { bonsai_tmux_at_least "$@"; }
 bonsai_shell_quote() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
+bonsai_tmux_quote() {
+  local value=$1
+  value=${value//\\/\\\\}; value=${value//\"/\\\"}; value=${value//\$/\\\$}; value=${value//\`/\\\`}
+  printf '"%s"' "$value"
+}
+bonsai_run_command() {
+  local background='' cmd='' arg
+  if [ "${1:-}" = -b ]; then background='-b '; shift; fi
+  for arg in "$@"; do cmd="$cmd$(bonsai_shell_quote "$arg") "; done
+  printf 'run-shell %s%s' "$background" "$(bonsai_tmux_quote "$cmd")"
+}
 bonsai_detach() {
   if command -v setsid >/dev/null 2>&1; then
     setsid "$@" </dev/null >/dev/null 2>&1 &
@@ -65,16 +82,25 @@ wt_sanitize() { printf '%s' "$1" | sed 's#[/\\]#-#g'; }      # mirrors worktrunk
 
 # Signal launch.sh to re-open the bonsai menu, then exit cleanly. Used on cancel
 # (fzf abort / empty prompt / key-to-close) so backing out returns to the menu.
-wt_back() { tmux set-option -g @bonsai-back 1; exit 0; }
+wt_back() { tmx set-option -g @bonsai-back 1; exit 0; }
 
 wt_agent() {
-  local a; a=$(tmux show-option -gqv @bonsai-agent)
+  local a; a=$(tmx show-option -gqv @bonsai-agent)
   printf '%s' "${a:-claude}"
+}
+
+wt_launch_agent() {
+  local pane command now agent
+  pane=$(tmx display-message -p -t "$1" '#{pane_id}') || return 1
+  command=$(wt_agent); agent=${command%% *}; agent=${agent##*/}; now=$(date +%s)
+  tmx set -p -t "$pane" @agent_launch_ts "$now" \; set -p -t "$pane" @agent_state unknown \; \
+    set -p -t "$pane" @agent_state_ts "$now" \; set -p -t "$pane" @agent_type "$agent"
+  tmx send-keys -t "$pane" -l -- "$command" && tmx send-keys -t "$pane" Enter
 }
 
 wt_path_of() {                                              # branch -> worktree path ('' if none)
   git worktree list --porcelain | awk -v b="refs/heads/$1" '
-    /^worktree /{w=$2} /^branch /{if($2==b) print w}'
+    /^worktree /{w=substr($0,10)} /^branch /{if($2==b) print w}'
 }
 
 # fzf-pick a worktree/branch and print it. Returns fzf's exit code so callers can
@@ -105,6 +131,6 @@ wt_copy_ignored() {                                         # path -> copy .env 
 wt_ensure_session() {                                       # branch path
   local S
   S=$(wt_sanitize "$1")
-  tmux has-session -t "$S" 2>/dev/null || tmux new-session -d -s "$S" -c "$2"
+  tmx has-session -t "$S" 2>/dev/null || tmx new-session -d -s "$S" -c "$2"
   printf '%s' "$S"
 }
