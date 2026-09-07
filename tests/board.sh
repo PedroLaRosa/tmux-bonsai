@@ -101,17 +101,27 @@ printf '1\n' > "$ports_dir/99999999"
 [ ! -f "$ports_dir/99999999" ]
 for pane in "$p1" "$p2" "$p3" "$shell_pane" "$input_pane"; do tmx kill-pane -t "$pane"; done
 # An actual fzf TTY catches invalid binding syntax and missing listener exports.
+wait_for_board() {
+ local pane=$1 attempt capture='' found=0 registration
+ for ((attempt=0; attempt<100; attempt++)); do
+  capture=$(tmx capture-pane -p -t "$pane" 2>/dev/null) || break
+  found=0
+  for registration in "$ports_dir/"*; do
+   if [ -f "$registration" ] && kill -0 "${registration##*/}" 2>/dev/null; then found=1; fi
+  done
+  case "$capture:$found" in *'agents>'*:1) printf '%s\n' "$capture"; return;; esac
+  sleep 0.05
+ done
+ assert_contains "$capture" 'agents>'
+ assert_eq 1 "$found" 'fzf listener registered'
+}
 if command -v fzf >/dev/null && command -v curl >/dev/null; then
  push_pane=$(test_pane)
  tmx set -p -t "$push_pane" @agent_type manual \; set -p -t "$push_pane" @agent_state working \; set -p -t "$push_pane" @agent_state_ts "$now"
  tmx set -g @bonsai-board-refresh 30
  board_command=$(printf '%q ' "$BONSAI_SCRIPTS/board.sh" --watch --compact)
  board_pane=$(tmx new-window -d -P -F '#{pane_id}' "$board_command")
- sleep 0.5
- assert_contains "$(tmx capture-pane -p -t "$board_pane")" 'agents>'
- found=0
- for registration in "$ports_dir/"*; do [ ! -f "$registration" ] || found=1; done
- assert_eq 1 "$found" 'fzf listener registered'
+ wait_for_board "$board_pane" >/dev/null
  tmx set -p -t "$push_pane" @agent_state waiting \; set -p -t "$push_pane" @agent_ask PUSH-VISIBLE
  "$BONSAI_SCRIPTS/board.sh" --refresh
  for _ in $(seq 1 30); do
@@ -252,8 +262,7 @@ if command -v fzf >/dev/null && command -v curl >/dev/null; then
  tmx set -g @bonsai-notify on \; set -g @bonsai-notify-backend none
  board_command=$(printf '%q ' "$BONSAI_SCRIPTS/board.sh" --watch --compact)
  board_pane=$(tmx new-window -d -P -F '#{pane_id}' "$board_command")
- sleep 0.5
- compact_capture=$(tmx capture-pane -p -t "$board_pane")
+ compact_capture=$(wait_for_board "$board_pane")
  assert_contains "$compact_capture" '1 idle'
  assert_contains "$compact_capture" 'notifications unverified'
  tmx kill-pane -t "$board_pane"

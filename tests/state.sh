@@ -162,6 +162,15 @@ for title_case in '⢿ Claude' '◒ Codex' '✋ ⠙ Gemini' 'Codex Ready' 'ready
   tmx select-pane -t "$pane" -T "$title_case"
   assert_eq "$("$BONSAI_SCRIPTS/title.sh" --classify "$title_case")" "$(tmx display-message -p -t "$pane" "$title_format")" "tmux/title classifier parity: $title_case"
 done
+# Cover all 256 frames, including ones outside the common ten-dot spinner.
+while IFS= read -r glyph; do
+  tmx select-pane -t "$pane" -T "$glyph Claude"
+  assert_eq working "$(tmx display-message -p -t "$pane" "$title_format")" "braille title frame: $glyph"
+done < <(jq -nr 'range(10240;10496) | [.] | implode')
+for title_case in '⟿ unrelated' '⤀ unrelated'; do
+  tmx select-pane -t "$pane" -T "$title_case"
+  assert_eq none "$(tmx display-message -p -t "$pane" "$title_format")" 'braille range boundary'
+done
 untracked=$(test_pane)
 tmx select-pane -t "$untracked" -T '⠙ unrelated process'
 "$BONSAI_SCRIPTS/title.sh" "$untracked"

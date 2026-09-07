@@ -4,7 +4,10 @@ source "$(cd "$(dirname "$0")" && pwd)/_state.sh"
 if [ "${1:-}" = --format ]; then
   ignored='#{m/ri:(Cursor Agent|claude agents),#{pane_title}}'
   permission='#{m/r:✋,#{pane_title}}'
-  spinner='#{m/r:([⠀-⣿]|◐|◓|◑|◒|✦|⏲),#{pane_title}}'
+  # POSIX regex ranges use the server locale's collation, unlike jq's Unicode
+  # ranges. Literal alternatives cover every braille frame on BSD and glibc.
+  braille=$(jq -nr '[range(10240;10496) | [.] | implode] | join("|")')
+  spinner="#{m/r:($braille|◐|◓|◑|◒|✦|⏲),#{pane_title}}"
   idle_glyph='#{m/r:(✳|◇),#{pane_title}}'
   working='#{m/ri:(^|[^a-zA-Z0-9_./~\\-])(working|thinking|running)($|[^a-zA-Z0-9_./~\\-]),#{pane_title}}'
   idle='#{m/ri:(^|[^a-zA-Z0-9_./~\\-])(ready|idle|done)($|[^a-zA-Z0-9_./~\\-]),#{pane_title}}'
