@@ -127,7 +127,7 @@ for backend in "${backend_list[@]}"; do
   esac
 done
 if [ "$delivered" -eq 1 ]; then
-  tmx set -p -t "$pane" @agent_notified_ts "$(date +%s)" \; set -p -t "$pane" @agent_notify_id "$BONSAI_ID" 2>/dev/null || true
+  tmx set -p -t "$pane" @agent_notified_ts "$(date +%s)" \; set -p -t "$pane" @agent_notify_id "$BONSAI_ID" \; set -p -t "$pane" @agent_notify_backends "$backends" 2>/dev/null || true
   bonsai_play_sound "$sound_mode" "$BONSAI_SOUND" "$backends"
 fi
 tmx wait-for -U "bonsai-notify-$pane"; trap - EXIT

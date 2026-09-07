@@ -42,10 +42,18 @@ if [ "$(bonsai_opt @bonsai-window-glyphs off)" = on ]; then
     current=$(tmx show-option -gqv "$option")
     case "$current" in *'#{E:@bonsai-window-glyph}'*) ;; *) tmx set -g "$option" "#{E:@bonsai-window-glyph}$current";; esac
   done
+  tmx set -g @bonsai-window-glyphs-managed 1
+elif [ "$(tmx show-option -gqv @bonsai-window-glyphs-managed)" = 1 ]; then
+  for option in window-status-format window-status-current-format; do
+    current=$(tmx show-option -gqv "$option")
+    tmx set -g "$option" "${current//'#{E:@bonsai-window-glyph}'/}"
+  done
+  tmx set -gu @bonsai-window-glyphs-managed
 fi
 if [ "$(bonsai_opt @bonsai-status off)" = on ]; then
   current=$(tmx show-option -gqv status-right)
-  case "$current" in *'/status.sh'*) ;; *) tmx set -g status-right "#($(bonsai_shell_quote "$BONSAI_SCRIPTS/status.sh")) $current";; esac
+  segment="#($(bonsai_shell_quote "$BONSAI_SCRIPTS/status.sh")) "
+  case "$current" in *'/status.sh'*) ;; *) tmx set -g status-right "$segment$current"; tmx set -g @bonsai-status-segment "$segment";; esac
   # Save the existing mouse action once so clicks outside our range retain it.
   if [ -z "$(tmx show-option -gqv @bonsai-mouse-original)" ]; then
     original=$(tmx list-keys -T root MouseDown1Status 2>/dev/null | sed 's/^.*MouseDown1Status[[:space:]]*//')
@@ -53,6 +61,14 @@ if [ "$(bonsai_opt @bonsai-status off)" = on ]; then
   fi
   original=$(tmx show-option -gqv @bonsai-mouse-original)
   tmx bind -T root MouseDown1Status if -F '#{==:#{mouse_status_range},bonsai}' "$(bonsai_run_command -b "$BONSAI_SCRIPTS/launch.sh" board.sh)" "$original"
+else
+  segment=$(tmx show-option -gqv @bonsai-status-segment)
+  if [ -n "$segment" ]; then
+    current=$(tmx show-option -gqv status-right)
+    tmx set -g status-right "${current/"$segment"/}" \; set -gu @bonsai-status-segment
+    original=$(tmx show-option -gqv @bonsai-mouse-original)
+    [ -z "$original" ] || tmx bind -T root MouseDown1Status "$original"
+  fi
 fi
 state_dir=$(bonsai_state_dir); config_dir=$(bonsai_config_dir)
 if [ ! -e "$state_dir/first-run-shown" ] && [ ! -f "$config_dir/settings.tmux" ]; then

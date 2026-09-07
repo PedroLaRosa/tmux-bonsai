@@ -20,6 +20,18 @@ assert_jq "$json" 'all(.[]; (.ask|contains("\u001f") or contains("\n"))|not)'
 all_controls=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177'
 tmx set -p -t "$p1" @agent_ask "before${all_controls}café 🤖"
 assert_jq "$("$BONSAI_SCRIPTS/list.sh" --json)" "any(.[]; .pane_id==\"$p1\" and .ask==(\"before\"+(\" \"*32)+\"café 🤖\"))"
+# Reproduce tmux 3.4 output quoting even when this suite uses a newer server:
+# its stdout turns US into literal \037 while preserving framing TABs.
+command() {
+ if [ "${1:-}" = tmux ]; then
+  builtin command "$@" | LC_ALL=C sed 's/'$'\037''/\\037/g'
+ else builtin command "$@"; fi
+}
+export -f command
+legacy_json=$("$BONSAI_SCRIPTS/list.sh" --json)
+unset -f command
+assert_jq "$legacy_json" ".[0].pane_id==\"$p1\" and .[1].pane_id==\"$p2\""
+assert_jq "$legacy_json" 'all(.[]; (.ask|contains("\u001f") or contains("\n"))|not)'
 # Simulate an incomplete tmux record. Fail with a framing diagnostic instead of
 # a jq null-index crash or a misleading empty/partial list of agents.
 command() {

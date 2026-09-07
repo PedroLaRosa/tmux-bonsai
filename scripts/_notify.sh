@@ -118,9 +118,12 @@ bonsai_deliver_backend() {
 }
 
 bonsai_dismiss() {
-  local pane=$1 backend id
+  local pane=$1 backend id used
   # Track fan-out independently; never close another application's banners.
-  if command -v terminal-notifier >/dev/null 2>&1; then terminal-notifier -remove "bonsai-$pane" >/dev/null 2>&1 || true; fi
+  used=$(bonsai_pane_opt "$pane" @agent_notify_backends)
+  case ",$used," in *,terminal-notifier,*)
+    if command -v terminal-notifier >/dev/null 2>&1; then terminal-notifier -remove "bonsai-$pane" >/dev/null 2>&1 || true; fi;;
+  esac
   for backend in dunstify gdbus notify-send; do
     id=$(bonsai_notify_id "$pane" "$backend")
     [[ "$id" =~ ^[0-9]+$ ]] && [ "$id" -gt 0 ] || continue

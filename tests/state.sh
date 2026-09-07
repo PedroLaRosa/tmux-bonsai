@@ -74,6 +74,8 @@ event claude UserPromptSubmit "$(jq -cn '{prompt:("é" * 170 + "\n\u001b[31mred\
 assert_eq 160 "$(opt @agent_prompt | jq -Rrs 'length')" 'UTF-8 truncation'
 event claude Stop '{"last_assistant_message":"hello\nworld\u001b[31m red\u0007"}'
 assert_eq 'hello world red' "$(opt @agent_msg)"
+tmx set-option -p -t "$pane" @agent_msg $'tab\tnewline\nFS\034US\037 literal \\037'
+assert_jq "$(bonsai_snapshot "$pane")" '.msg == "tab newline FS US  literal \\037"' 'wire tabs preserve field framing without decoding literal escapes'
 
 # Child IDs make duplicate starts/stops idempotent, and parent Stop waits.
 event claude UserPromptSubmit '{}'

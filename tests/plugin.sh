@@ -26,3 +26,7 @@ status=$(tmx show-option -gqv status-right)
 bash "$TEST_ROOT/bonsai.tmux"
 assert_eq "$status" "$(tmx show-option -gqv status-right)"
 assert_contains "$status" theme
+tmx set -g @bonsai-status off \; set -g @bonsai-window-glyphs off
+bash "$TEST_ROOT/bonsai.tmux"
+assert_eq theme "$(tmx show-option -gqv status-right)" 'disable preserves theme'
+case "$(tmx show-option -gqv window-status-format)" in *'#{E:@bonsai-window-glyph}'*) exit 1;; esac

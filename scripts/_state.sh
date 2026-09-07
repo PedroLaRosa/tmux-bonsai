@@ -8,15 +8,22 @@ bonsai_pane_opt() {
   printf '%s' "${value:-${3:-}}"
 }
 
-# Values in the state store cannot contain this separator. A single format read
-# also gives callers a consistent snapshot of an atomic reducer write.
+# tmux 3.4 escapes FS/US on command output, but preserves tab. Scrub controls
+# from each field before adding wire tabs, then restore our internal separator.
+# A single format read gives a consistent snapshot of an atomic reducer write.
 bonsai_snapshot() {
-  local pane=$1 key format='' sep=$'\034' snapshot local_state
+  local pane=$1 key format='' sep=$'\t' snapshot local_state wire controls
   local keys='state state_ts seq generation type prompt msg ask tool session transcript seen_ts notified_ts title_state title_ts hook_ts hook_mode children child_ids parent_done source_seq'
-  for key in $keys; do format="${format}#{@agent_${key}}${sep}"; done
-  format="${format}#{pane_id}${sep}#{session_name}${sep}#{window_name}${sep}#{pane_current_path}${sep}#{window_id}${sep}#{pane_current_command}${sep}#{pane_pid}"
-  snapshot=$(tmx display-message -p -t "$pane" "$format" 2>/dev/null | jq -Rc --arg keys "$keys pane session_name window_name cwd window_id command pid" '
+  controls=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177'
+  for key in $keys; do format="${format}#{s|[$controls]| |:@agent_${key}}${sep}"; done
+  for key in pane_id session_name window_name pane_current_path window_id pane_current_command; do
+    format="${format}#{s|[$controls]| |:$key}${sep}"
+  done
+  format="${format}#{pane_pid}"
+  wire=$(tmx display-message -p -t "$pane" "$format" 2>/dev/null) || return 1
+  snapshot=$(printf '%s\n' "${wire//$'\t'/$'\034'}" | jq -Rc --arg keys "$keys pane session_name window_name cwd window_id command pid" '
     split("\u001c") as $values | ($keys | split(" ")) as $keys |
+    if ($values | length) != ($keys | length) then error("invalid pane snapshot") else . end |
     reduce range(0; $keys | length) as $i ({}; .[$keys[$i]] = ($values[$i] // "")) |
     .state = (if .state == "" then "unknown" else .state end) |
     .child_ids = (.child_ids | fromjson? // []) |

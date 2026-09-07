@@ -4,7 +4,11 @@ set -uo pipefail
 umask 077
 . "$(dirname "$0")/_lib.sh"
 us=$'\037'
-options=$(tmx display-message -p "#{@bonsai-board-show-shells}$us#{@bonsai-board-sort}$us#{@bonsai-state-dir}$us#{@bonsai-idle-after}$us#{@bonsai-stale-after}$us#{@bonsai-glyphs}" 2>/dev/null) || options=''
+wire_separator=$'\t'
+options=$(tmx display-message -p "#{@bonsai-board-show-shells}$wire_separator#{@bonsai-board-sort}$wire_separator#{@bonsai-state-dir}$wire_separator#{@bonsai-idle-after}$wire_separator#{@bonsai-stale-after}$wire_separator#{@bonsai-glyphs}" 2>/dev/null) || options=''
+# tmux 3.4 quotes other C0 bytes (US becomes literal \037), but preserves TAB.
+# Convert the wire framing before read: a TAB IFS would collapse empty options.
+options=${options//$wire_separator/$us}
 IFS="$us" read -r all sort state_root idle_setting stale_setting glyph_setting <<< "$options"
 mode=table all=${all:-off} sort=${sort:-state} compact=off
 state_root=${state_root:-${XDG_STATE_HOME:-$HOME/.local/state}/tmux-bonsai}
@@ -30,9 +34,11 @@ fmt='#{pane_id}'
 # and libc regex collation. An explicit class behaves the same on BSD/glibc.
 controls=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177'
 for field in session_name session_id window_name window_id pane_index pane_current_path pane_pid pane_current_command @agent_type @agent_state @agent_state_ts @agent_updated_ts @agent_seen_ts @agent_prompt @agent_msg @agent_ask @agent_tool @agent_session @agent_children @agent_model @agent_ctx pane_dead @agent_hook_ts window_index @agent_launch_ts; do
-  fmt="$fmt$us#{s|[$controls]| |:$field}"
+  fmt="$fmt$wire_separator#{s|[$controls]| |:$field}"
 done
-tmx list-panes -a -F "$fmt" > "$tmp/panes" 2>/dev/null || :
+# All field TABs were scrubbed above; only framing TABs remain. Translate them
+# after tmux output quoting, keeping the internal/public row schema unchanged.
+tmx list-panes -a -F "$fmt" 2>/dev/null | tr '\t' '\037' > "$tmp/panes" || :
 # A framing error must be visible; silently dropping a fragment hides agents.
 # Validate before indexing metadata maps so errors identify the broken snapshot.
 awk -F "$us" '
