@@ -7,7 +7,7 @@ Open **Agents → agent board** from `prefix + W`, or run `bonsai board` in a te
 A board can look like this (its preview also shows the live terminal tail):
 
 ```text
-● 2 needs you · ✖ 1 · ◐ 2 working · ✔ 1 done
+● 2 needs you · ✖ 1 · ◐ 2 working · ✔ 1 done · 0 idle
 agents>
 > ● 12m  claude    fix-auth        api:2.1  Bash: npm test — allow?
   ● 3m   opencode  payments        pay:1.0  Which database should I use?
@@ -36,9 +36,9 @@ Waiting agents come first, oldest first, so a long-running queue cannot hide an 
 | ? | Show help |
 | Escape | Return to the menu or quit the persistent board |
 
-Search matches agent, branch, location and preview. An offline worktree row opens its session. Replies use tmux literal input; strings such as `C-c` and `$(...)` are text, not tmux keys or commands executed by bonsai. Input is still delivered to the program running in the destination pane, so review the destination before confirming.
+Search matches agent, branch, location and preview in the full board, and branch and preview in the compact board. An offline worktree row opens its session. Replies use tmux literal input; strings such as `C-c` and `$(...)` are text, not tmux keys or commands executed by bonsai. Input is still delivered to the program running in the destination pane, so review the destination before confirming.
 
-Each board registers an authenticated local fzf listener. Accepted hook events push a reload and preview refresh, and a two-second timer updates ages, headers and terminal output. Dead listeners are removed automatically. Each board has its own shell-visibility and sort settings. Registrations and cycling cursors are scoped to the tmux socket, so multiple servers can share a state directory. fzf 0.38 or newer and curl provide the complete board; older versions without listen support use Ctrl-R for manual reload.
+Each board registers an authenticated local fzf listener. Accepted hook events push a reload and preview refresh, and a two-second timer updates ages, headers and terminal output. Dead listeners are removed automatically. Each board has its own shell-visibility and sort settings. Registrations and cycling cursors are scoped to the tmux socket, so multiple servers can share a state directory. fzf 0.40 or newer and curl provide the complete board, including dynamic headers; older versions use Ctrl-R for manual reload. Cursor tracking is enabled from fzf 0.39.
 
 `bonsai next` cycles waiting agents, then errors, then unseen completions. The same action is available with `prefix + W j`. `bonsai feed` shows recent transitions and notification decisions; Ctrl-W shows why a notification was suppressed, and Enter jumps to its pane. `bonsai feed --tail` streams events, and `--json` exposes the records to scripts.
 

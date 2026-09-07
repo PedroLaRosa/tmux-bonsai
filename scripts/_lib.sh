@@ -9,23 +9,25 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
 bonsai_tmux_wire_init() {
   local socket=${1:-${BONSAI_SOCKET:-${TMUX:-}}} probe
   socket=${socket%%,*}
-  if [ "${BONSAI_TMUX_DOLLAR_SOCKET-}" = "$socket" ] && [ -n "${BONSAI_TMUX_DOLLAR_ESCAPING:-}" ]; then return 0; fi
+  if [ "${BONSAI_TMUX_DOLLAR_SOCKET-}" = "$socket" ] && [ -n "${BONSAI_TMUX_DOLLAR_ESCAPING:-}" ] && [ -n "${BONSAI_TMUX_DOLLAR_HIGH_BYTES:-}" ]; then return 0; fi
   if [ -n "$socket" ]; then
-    probe=$(command tmux -S "$socket" display-message -p '$_bonsai_wire' 2>/dev/null) || return 0
+    probe=$(command tmux -S "$socket" display-message -p '$_bonsai_wire$é' 2>/dev/null) || return 0
   else
-    probe=$(command tmux display-message -p '$_bonsai_wire' 2>/dev/null) || return 0
+    probe=$(command tmux display-message -p '$_bonsai_wire$é' 2>/dev/null) || return 0
   fi
   BONSAI_TMUX_DOLLAR_SOCKET=$socket
   BONSAI_TMUX_DOLLAR_ESCAPING=off
-  [ "$probe" != '\$_bonsai_wire' ] || BONSAI_TMUX_DOLLAR_ESCAPING=on
-  export BONSAI_TMUX_DOLLAR_SOCKET BONSAI_TMUX_DOLLAR_ESCAPING
+  BONSAI_TMUX_DOLLAR_HIGH_BYTES=off
+  case "$probe" in '\$_bonsai_wire'*) BONSAI_TMUX_DOLLAR_ESCAPING=on;; esac
+  case "$probe" in *'\$é') BONSAI_TMUX_DOLLAR_HIGH_BYTES=on;; esac
+  export BONSAI_TMUX_DOLLAR_SOCKET BONSAI_TMUX_DOLLAR_ESCAPING BONSAI_TMUX_DOLLAR_HIGH_BYTES
 }
 # Cache the server capability once and inherit it in detached workers. Legacy
 # tmux adds a slash before $name/${name} even in supposedly raw command output.
 bonsai_tmux_wire_init
 
 tmx() {
-  local socket="${BONSAI_SOCKET:-${TMUX:-}}" normalize=off
+  local socket="${BONSAI_SOCKET:-${TMUX:-}}" normalize=off dollar_class='a-zA-Z_{' decode_pattern
   socket=${socket%%,*}
   bonsai_tmux_wire_init "$socket"
   # These commands use tmux's formatted print path. Terminal captures are raw,
@@ -37,11 +39,16 @@ tmx() {
   if [ "$normalize" = on ]; then
     # Remove exactly the server-added slash; preserve literal original slashes,
     # octal-looking text, command substitutions, and dollars before digits.
+    # Legacy Darwin also calls byte isalpha on UTF-8 lead bytes. Its Latin-1
+    # letters include C2-D6/D8-F4, but exclude D7 (multiplication sign), so
+    # Unicode character classes would incorrectly decode e.g. a literal \$נ.
+    [ "${BONSAI_TMUX_DOLLAR_HIGH_BYTES:-off}" != on ] || dollar_class="$dollar_class"$'\302-\326\330-\364'
+    decode_pattern='s/\\(\$['"$dollar_class"'])/\1/g'
     if [ -n "$socket" ]; then
-      command tmux -S "$socket" "$@" | LC_ALL=C sed -E 's/\\(\$[a-zA-Z_{])/\1/g'
+      command tmux -S "$socket" "$@" | LC_ALL=C sed -E "$decode_pattern"
       return "${PIPESTATUS[0]}"
     else
-      command tmux "$@" | LC_ALL=C sed -E 's/\\(\$[a-zA-Z_{])/\1/g'
+      command tmux "$@" | LC_ALL=C sed -E "$decode_pattern"
       return "${PIPESTATUS[0]}"
     fi
   fi

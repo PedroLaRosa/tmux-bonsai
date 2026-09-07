@@ -30,7 +30,7 @@ tears things down itself.
 - tmux **>= 3.2** (`display-popup`)
 - [worktrunk](https://worktrunk.dev) (`wt`) on `PATH`
 - `git`, `awk`, `sed` (standard)
-- `fzf` **>= 0.38** and `curl` — for live agent-board refresh (older fzf supports manual reload)
+- `fzf` **>= 0.40** and `curl` — for live agent-board refresh (older fzf supports manual reload)
 - `jq` — for agent payloads, settings installers, and JSON output
 - your agent CLI (`claude`, `opencode`, ...) — for "new + agent"
 

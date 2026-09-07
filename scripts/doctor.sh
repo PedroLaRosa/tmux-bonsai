@@ -19,8 +19,8 @@ if bonsai_tmux_at_least 3.3; then check tmux-features ok "$version: popups, titl
 elif bonsai_tmux_at_least 3.2; then check tmux-features warning "$version: basic popups only" 'Upgrade to 3.3+ for titles and OSC.'
 else check tmux-features missing "$version" 'Install tmux 3.2 or later.'; fi
 fzf_version=$(fzf --version 2>/dev/null)
-if printf '%s' "$fzf_version" | awk -F. '{exit !(($1+0)>0 || ($2+0)>=38)}'; then check fzf-features ok "$fzf_version: live refresh and cursor tracking"
-else check fzf-features warning "$fzf_version" 'Upgrade fzf to 0.38 or later for live refresh and cursor tracking.'; fi
+if printf '%s' "$fzf_version" | awk -F. '{exit !(($1+0)>0 || ($2+0)>=40)}'; then check fzf-features ok "$fzf_version: live refresh and cursor tracking"
+else check fzf-features warning "$fzf_version" 'Upgrade fzf to 0.40 or later for live refresh; older versions use Ctrl-R to reload.'; fi
 check terminal ok "${TERM_PROGRAM:-unknown} / $(bonsai_terminal)"
 focus=$(tmx show-option -gqv focus-events 2>/dev/null)
 if [ "$focus" = on ] && [ -s "$(bonsai_focus_file)" ]; then check focus ok 'focus reporting observed'

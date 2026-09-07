@@ -41,7 +41,7 @@ view_rows() {
 }
 case "${1:-}" in
  --ports-dir) printf '%s\n' "$ports"; exit;;
- --header) board_header; exit;;
+ --header) board_header "${2:-}"; exit;;
  --rows)
   shift; if [ "${1:-}" = --view ]; then view_rows "${2:-}"; else exec "$BONSAI_SCRIPTS/list.sh" --rows "$@"; fi; exit;;
  --register)
@@ -55,7 +55,7 @@ case "${1:-}" in
    read -r port token < "$registration"
    case "$port:$pid" in *[!0-9:]*|:|*:) rm -f "$registration"; continue;; esac
    if ! kill -0 "$pid" 2>/dev/null || ! curl --silent --fail --max-time 0.2 \
-    --request POST -H "X-API-Key: ${token:-}" --data-binary "reload($self --rows --view $pid)+refresh-preview+change-header($(board_header "$pid"))" "http://127.0.0.1:$port" >/dev/null 2>&1; then
+    --request POST -H "X-API-Key: ${token:-}" --data-binary "reload($self --rows --view $pid)+refresh-preview" "http://127.0.0.1:$port" >/dev/null 2>&1; then
     rm -f "$registration"
    fi
   done; exit;;
@@ -70,7 +70,7 @@ case "${1:-}" in
   all=off sort=state compact=off
   [ ! -f "$views/$pid" ] || read -r all sort compact < "$views/$pid"
   search_options "$compact"
-  action=$(view_rows "$pid" | fzf --filter "$query" --no-sort --ansi --delimiter $'\037' "${search_args[@]}" | awk -F '\037' -v current="$current" -v direction="$direction" '
+  action=$(view_rows "$pid" | fzf --filter "$query" --sync --no-sort --ansi --delimiter $'\037' "${search_args[@]}" | awk -F '\037' -v current="$current" -v direction="$direction" '
    $1==current {selected=NR} $2 ~ /^\[0,/ {positions[++n]=NR}
    END {if(!n) exit; result=positions[1];
     if(direction=="previous") {result=positions[n]; for(i=n;i>0;i--) if(positions[i]<selected){result=positions[i];break}}
@@ -159,7 +159,9 @@ script() { printf '%q' "$BONSAI_SCRIPTS/$1"; }
 header=$(board_header "$$")
 us=$'\037'
 search_options "$compact"
-args=(--ansi --delimiter "$us" "${search_args[@]}" --layout reverse --no-sort --header "$header" --prompt 'agents> ')
+# The initial snapshot is finite. Sync also preserves the original hidden pane
+# ID in older fzf versions when --filter and --with-nth are used together.
+args=(--sync --ansi --delimiter "$us" "${search_args[@]}" --layout reverse --no-sort --header "$header" --prompt 'agents> ')
 args+=(--bind "ctrl-r:execute($(script reply.sh) {1})+reload($reload)")
 args+=(--bind "ctrl-y:execute($(script reply.sh) {1} y --waiting-only)+reload($reload)")
 args+=(--bind "ctrl-u:execute-silent($self --unread {1})+reload($reload)")
@@ -173,17 +175,19 @@ if [ "$compact" = on ]; then
  args+=(--no-info)
 else args+=(--preview "$self --preview {1}" --preview-window 'right:55%:wrap' --bind 'ctrl-p:toggle-preview'); fi
 version=$(fzf --version | awk '{split($1,v,".");print v[1]*100+v[2]}')
-if [ "${version:-0}" -ge 38 ]; then args+=(--track); fi
+if [ "${version:-0}" -ge 39 ]; then args+=(--track); fi
 # New fzf releases can track the hidden pane ID even when ages/text change.
 if fzf --help | grep -q -- '--id-nth'; then args+=(--id-nth 1); fi
-if [ "${version:-0}" -ge 36 ] && command -v curl >/dev/null; then
- args+=(--listen 0 --bind "start:execute-silent($self --register \$FZF_PORT)")
+if [ "${version:-0}" -ge 40 ] && command -v curl >/dev/null; then
+ # Refresh the header after reload completes; a simultaneous header action can
+ # be overwritten while fzf is replacing its input snapshot.
+ args+=(--listen 0 --bind "start:execute-silent($self --register \$FZF_PORT),load:transform-header($self --header $$)")
  interval=$(bonsai_duration "$(bonsai_opt @bonsai-board-refresh 2)")
  ( while kill -0 "$BONSAI_BOARD_PID" 2>/dev/null; do sleep "$interval"; "$BONSAI_SCRIPTS/board.sh" --refresh "$BONSAI_BOARD_PID"; done ) </dev/null >/dev/null 2>&1 &
  ticker=$!
 else
  args+=(--bind "ctrl-r:reload($reload),ctrl-n:down,ctrl-b:up" --header "$header
-Install fzf >= 0.38 and curl for live refresh. Ctrl-R reloads.")
+Install fzf >= 0.40 and curl for live refresh. Ctrl-R reloads.")
 fi
 if [ "$watch" = on ]; then args+=(--bind "enter:execute-silent($(script jump.sh) {1})"); fi
 selected=$(view_rows "$$" | fzf "${args[@]}") || {

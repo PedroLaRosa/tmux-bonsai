@@ -102,6 +102,9 @@ printf '1\n' > "$ports_dir/99999999"
 for pane in "$p1" "$p2" "$p3" "$shell_pane" "$input_pane"; do tmx kill-pane -t "$pane"; done
 # An actual fzf TTY catches invalid binding syntax and missing listener exports.
 if command -v fzf >/dev/null && command -v curl >/dev/null; then
+ push_pane=$(test_pane)
+ tmx set -p -t "$push_pane" @agent_type manual \; set -p -t "$push_pane" @agent_state working \; set -p -t "$push_pane" @agent_state_ts "$now"
+ tmx set -g @bonsai-board-refresh 30
  board_command=$(printf '%q ' "$BONSAI_SCRIPTS/board.sh" --watch --compact)
  board_pane=$(tmx new-window -d -P -F '#{pane_id}' "$board_command")
  sleep 0.5
@@ -109,9 +112,35 @@ if command -v fzf >/dev/null && command -v curl >/dev/null; then
  found=0
  for registration in "$ports_dir/"*; do [ ! -f "$registration" ] || found=1; done
  assert_eq 1 "$found" 'fzf listener registered'
+ tmx set -p -t "$push_pane" @agent_state waiting \; set -p -t "$push_pane" @agent_ask PUSH-VISIBLE
  "$BONSAI_SCRIPTS/board.sh" --refresh
+ for _ in $(seq 1 30); do
+  capture=$(tmx capture-pane -p -t "$board_pane")
+  case "$capture" in *'1 needs you'*PUSH-VISIBLE*) break;; esac
+  sleep 0.05
+ done
+ assert_contains "$capture" PUSH-VISIBLE
+ assert_contains "$capture" '1 needs you'
  tmx kill-pane -t "$board_pane"
+ tmx kill-pane -t "$push_pane"
+ tmx set -g @bonsai-board-refresh 2
 fi
+# Older fzf releases retain the board with manual reload, without unsupported
+# listener/header actions or the 0.39-only tracking flag.
+export FZF_TEST_ARGS="$TMP/fzf-args" FZF_TEST_VERSION=0.38.0
+fzf() {
+ case "${1:-}" in --version) printf '%s\n' "$FZF_TEST_VERSION";; --help) :;;
+  *) printf '%s\n' "$@" > "$FZF_TEST_ARGS"; return 1;; esac
+}
+export -f fzf
+"$BONSAI_SCRIPTS/board.sh" --watch
+assert_contains "$(cat "$FZF_TEST_ARGS")" 'Ctrl-R reloads.'
+if grep -Eq -- '^--(track|listen)$' "$FZF_TEST_ARGS"; then echo 'unsupported fzf 0.38 feature' >&2; exit 1; fi
+FZF_TEST_VERSION=0.39.0 "$BONSAI_SCRIPTS/board.sh" --watch
+assert_contains "$(cat "$FZF_TEST_ARGS")" --track
+if grep -q -- '^--listen$' "$FZF_TEST_ARGS"; then echo 'unsupported dynamic header on fzf 0.39' >&2; exit 1; fi
+unset -f fzf
+unset FZF_TEST_ARGS FZF_TEST_VERSION
 # Spawn and fanout exercise the orchestration flow with a local agent fixture.
 # Worktrees already exist here; creation remains covered by worktrunk itself.
 mkdir -p "$TMP/repo" "$HOME/.local/bin"
