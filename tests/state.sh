@@ -76,6 +76,10 @@ event claude Stop '{"last_assistant_message":"hello\nworld\u001b[31m red\u0007"}
 assert_eq 'hello world red' "$(opt @agent_msg)"
 tmx set-option -p -t "$pane" @agent_msg $'tab\tnewline\nFS\034US\037 literal \\037'
 assert_jq "$(bonsai_snapshot "$pane")" '.msg == "tab newline FS US  literal \\037"' 'wire tabs preserve field framing without decoding literal escapes'
+dollar_text='$literal ${name} $(command) \$escaped \\$twice $9 \037'
+event claude Stop "$(jq -cn --arg message "$dollar_text" '{last_assistant_message:$message}')"
+assert_eq "$dollar_text" "$(opt @agent_msg)" 'raw pane option preserves dollar and literal backslash text'
+assert_eq "$dollar_text" "$(bonsai_snapshot "$pane" | jq -r .msg)" 'snapshot preserves dollar and literal backslash text'
 
 # Child IDs make duplicate starts/stops idempotent, and parent Stop waits.
 event claude UserPromptSubmit '{}'

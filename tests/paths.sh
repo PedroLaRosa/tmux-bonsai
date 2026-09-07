@@ -27,3 +27,16 @@ assert_eq "$value" "$(cat "$record")"
 "$BONSAI_SCRIPTS/settings.sh" set notify-command "$probe"
 "$BONSAI_SCRIPTS/settings.sh" init
 assert_eq "$probe" "$(bonsai_opt @bonsai-notify-command)"
+literal='$literal ${name} $(command) \$escaped \\$twice $9 \037'
+"$BONSAI_SCRIPTS/settings.sh" set sound-input "$literal"
+"$BONSAI_SCRIPTS/settings.sh" init
+assert_eq "$literal" "$(bonsai_opt @bonsai-sound-input)"
+assert_jq "$(tmx show-option -gqv @bonsai-applied)" '.["@bonsai-sound-input"] == "$literal ${name} $(command) \\$escaped \\\\$twice $9 \\037"'
+# Split inherits the selected pane's literal path and honors BONSAI_SOCKET even
+# when the caller's TMUX points elsewhere.
+window=$(tmx new-window -P -F '#{window_id}' -c "$plugin" 'sleep 3600')
+tmx select-window -t "$window"
+tmx set-option -g @bonsai-agent ':'
+TMUX="$TMP/missing.sock,0,0" bash "$BONSAI_SCRIPTS/split.sh" -h
+assert_eq "$(cd "$plugin" && pwd -P)" "$(tmx display-message -p '#{pane_current_path}')"
+assert_eq 2 "$(tmx list-panes -t "$window" -F '#{pane_id}' | wc -l | tr -d ' ')"

@@ -7,7 +7,7 @@ printf 'new worktree%s: ' "${mode:+ + $mode}"; read -r branch
 wt switch --create --no-hooks --no-cd "$branch" || { echo "wt switch failed"; sleep 1.5; exit 1; }
 path=$(wt_path_of "$branch"); wt_copy_ignored "$path"
 S=$(wt_ensure_session "$branch" "$path")
-tmux switch-client -t "$S"
+tmx switch-client -t "$S"
 if [ "$mode" = agent ]; then
   wt_launch_agent "$S"
 fi

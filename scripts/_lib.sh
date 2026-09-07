@@ -6,9 +6,45 @@ BONSAI_SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export BONSAI_SCRIPTS
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
 
-tmx() {
-  local socket="${BONSAI_SOCKET:-${TMUX:-}}"
+bonsai_tmux_wire_init() {
+  local socket=${1:-${BONSAI_SOCKET:-${TMUX:-}}} probe
   socket=${socket%%,*}
+  if [ "${BONSAI_TMUX_DOLLAR_SOCKET-}" = "$socket" ] && [ -n "${BONSAI_TMUX_DOLLAR_ESCAPING:-}" ]; then return 0; fi
+  if [ -n "$socket" ]; then
+    probe=$(command tmux -S "$socket" display-message -p '$_bonsai_wire' 2>/dev/null) || return 0
+  else
+    probe=$(command tmux display-message -p '$_bonsai_wire' 2>/dev/null) || return 0
+  fi
+  BONSAI_TMUX_DOLLAR_SOCKET=$socket
+  BONSAI_TMUX_DOLLAR_ESCAPING=off
+  [ "$probe" != '\$_bonsai_wire' ] || BONSAI_TMUX_DOLLAR_ESCAPING=on
+  export BONSAI_TMUX_DOLLAR_SOCKET BONSAI_TMUX_DOLLAR_ESCAPING
+}
+# Cache the server capability once and inherit it in detached workers. Legacy
+# tmux adds a slash before $name/${name} even in supposedly raw command output.
+bonsai_tmux_wire_init
+
+tmx() {
+  local socket="${BONSAI_SOCKET:-${TMUX:-}}" normalize=off
+  socket=${socket%%,*}
+  bonsai_tmux_wire_init "$socket"
+  # These commands use tmux's formatted print path. Terminal captures are raw,
+  # and interactive commands and mutations must retain their original streams.
+  case "${1:-}" in
+    display|display-message|show|show-option|show-options|show-environment|showenv|show-hooks|list-panes|list-clients|list-keys|list-windows|list-sessions)
+      normalize=${BONSAI_TMUX_DOLLAR_ESCAPING:-off};;
+  esac
+  if [ "$normalize" = on ]; then
+    # Remove exactly the server-added slash; preserve literal original slashes,
+    # octal-looking text, command substitutions, and dollars before digits.
+    if [ -n "$socket" ]; then
+      command tmux -S "$socket" "$@" | LC_ALL=C sed -E 's/\\(\$[a-zA-Z_{])/\1/g'
+      return "${PIPESTATUS[0]}"
+    else
+      command tmux "$@" | LC_ALL=C sed -E 's/\\(\$[a-zA-Z_{])/\1/g'
+      return "${PIPESTATUS[0]}"
+    fi
+  fi
   if [ -n "$socket" ]; then command tmux -S "$socket" "$@"; else command tmux "$@"; fi
 }
 bonsai_server_key() {
@@ -44,7 +80,13 @@ bonsai_tmux_at_least() {
   }'
 }
 tmux_at_least() { bonsai_tmux_at_least "$@"; }
-bonsai_shell_quote() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
+bonsai_shell_quote() {
+  # Quote replacement via variables: Bash 3.2 parses backslashes in an inline
+  # parameter-substitution replacement differently from current Bash.
+  local value=$1 quote="'" replacement="'\\''"
+  value=${value//"$quote"/"$replacement"}
+  printf "'%s'" "$value"
+}
 bonsai_tmux_quote() {
   local value=$1
   value=${value//\\/\\\\}; value=${value//\"/\\\"}; value=${value//\$/\\\$}; value=${value//\`/\\\`}
