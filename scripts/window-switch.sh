@@ -10,7 +10,7 @@ if [ -z "$path" ]; then
 fi
 S=$(wt_sanitize "$branch")
 # Jump to the worktree's window if it already exists, else open one for it.
-tmux select-window -t ":$S" 2>/dev/null || {
-  tmux new-window -c "$path" -n "$S"
-  tmux select-window -t ":$S"
+tmx select-window -t ":$S" 2>/dev/null || {
+  tmx new-window -c "$path" -n "$S"
+  tmx select-window -t ":$S"
 }

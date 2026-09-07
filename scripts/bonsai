@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+entry=${BASH_SOURCE[0]}
+while [ -L "$entry" ]; do
+  entry_dir=$(cd "$(dirname "$entry")" && pwd)
+  entry=$(readlink "$entry")
+  case "$entry" in /*) ;; *) entry=$entry_dir/$entry;; esac
+done
+S="$(cd "$(dirname "$entry")" && pwd)"
+json=''
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -S) export BONSAI_SOCKET=${2:?socket required}; shift 2;;
+    --json) json=--json; shift;;
+    *) break;;
+  esac
+done
+command=${1:-help}; [ $# -eq 0 ] || shift
+case "$command" in
+  help|-h|--help)
+    cat <<'HELP'
+Usage: bonsai [-S socket] [--json] COMMAND [arguments]
+  board [--watch|--compact|--window|--side]  Live agent board
+  list [--json|--rows|--counts|--all]       Agent snapshot
+  feed [--tail|--json]                     Events and notification decisions
+  jump PANE | next | ack PANE | unread PANE
+  reply PANE TEXT [--yes] [--no-enter]     Literal reply with confirmation
+  mark PANE working|waiting|done|error|clear
+  wait --pane PANE|--branch BRANCH --for STATE [--timeout DURATION]
+  send --to PANE|@waiting|@idle|@all|@branch:NAME TEXT [--yes]
+  spawn --branch NAME [--window] [--agent COMMAND] [--prompt TEXT]
+  fanout --branches a,b,c --prompt-file FILE
+  capture PANE [-S -200] | kill PANE [--pane] | resume PANE
+  notify test|status|deliver PANE CATEGORY
+  hooks install|status|remove|explain [AGENT ...]
+  settings get|set|list|reset [NAME] [VALUE]
+  doctor [--json] | open-settings | watch-silence WINDOW SECONDS
+HELP
+    ;;
+  mark)
+    pane=${1:?pane required}; state=${2:?state required}
+    if [ "$state" = clear ]; then exec "$S/clear-markers.sh" "$pane"; fi
+    case "$state" in working|waiting|done|error|idle|exited|stopped) ;; *) echo 'Invalid state' >&2; exit 2;; esac
+    export TMUX_PANE=$pane
+    jq -nc --arg state "$state" '{state:$state}' | "$S/agent-event.sh" manual mark;;
+  unread) exec "$S/ack.sh" "${1:?pane required}" --unread;;
+  fanout) exec "$S/spawn.sh" --fanout "$@";;
+  hooks)
+    action=${1:-status}; [ $# -eq 0 ] || shift
+    [ $# -gt 0 ] || set -- claude opencode codex gemini cursor copilot droid
+    result=0
+    for agent in "$@"; do
+      case "$agent" in claude|opencode|codex|codex-hooks|gemini|cursor|copilot|droid|claude-statusline) "$S/adapters/$agent.sh" "$action" || result=1;;
+        *) echo "Unknown agent: $agent" >&2; result=2;; esac
+    done
+    exit "$result";;
+  watch-silence)
+    source "$S/_lib.sh"
+    [[ "${2:-}" =~ ^[0-9]+$ ]] || { echo 'Seconds must be a nonnegative integer' >&2; exit 2; }
+    tmx set -w -t "${1:?window required}" monitor-silence "$2";;
+  board|list|feed|jump|next|ack|reply|wait|send|spawn|capture|kill|resume|notify|settings|doctor|open-settings)
+    [ -z "$json" ] || set -- "$@" "$json"
+    exec "$S/$command.sh" "$@";;
+  *) echo "Unknown command: $command (see bonsai help)" >&2; exit 2;;
+esac

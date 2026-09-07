@@ -9,4 +9,4 @@ if [ -z "$path" ]; then
   path=$(wt_path_of "$branch"); wt_copy_ignored "$path"
 fi
 S=$(wt_ensure_session "$branch" "$path")
-tmux switch-client -t "$S"
+tmx switch-client -t "$S"

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="656" viewBox="0 0 1180 656">
+<title>Actual bonsai agent board captured from a private tmux server</title>
+<rect width="1180" height="656" rx="10" fill="#15181e"/>
+<g fill="#dedee3" font-family="Menlo,Consolas,monospace" font-size="13" xml:space="preserve">
+<text x="16" y="29">agents&gt;                                                        ╭───────────────────────────────────────────────────────────────────────────╮</text>
+<text x="16" y="48">  30/30 +T ─────────────────────────────────────────────────── │ demo-worktree · /private/tmp/bonsai-board-capture.8iM6ge/case.rvLW59/1/40││</text>
+<text x="16" y="67">  ● 6 needs you · ✖ 6 · ◐ 6 working · ✔ 6 done · 6 idle        │ ↳ -project                                                               ││</text>
+<text x="16" y="86">  enter jump · ^r reply · ^y yes · ^u unread · ^x kill · ^e ·· │ claude · waiting · since Mon Sep  7 22:33:10 2026                        ││</text>
+<text x="16" y="105">▌ ● 20m   claude    demo-worktree   agents:1.0    PUSH-REFRE··││ agents:1.0                                                               ││</text>
+<text x="16" y="124">▌ ● 19m   claude    demo-worktree   agents:6.0    Bash: npm ··││ You: Bash: npm test — allow?                                             ││</text>
+<text x="16" y="143">▌ ● 19m   claude    demo-worktree   agents:11.0   Bash: npm ··││ Agent: Bash: npm test — allow?                                           ││</text>
+<text x="16" y="162">▌ ● 19m   claude    demo-worktree   agents:16.0   Bash: npm ··││ Ask: PUSH-REFRESH-VERIFIED: Bash npm test — allow?                       ││</text>
+<text x="16" y="181">▌ ● 19m   claude    demo-worktree   agents:21.0   Bash: npm ··││ Model:  · context  · children                                            ││</text>
+<text x="16" y="200">▌ ● 19m   claude    demo-worktree   agents:26.0   Bash: npm ··││                                                                          ││</text>
+<text x="16" y="219">▌ ✖ 19m   opencode  demo-worktree   agents:29.0   API error:··││                                                                          ││</text>
+<text x="16" y="238">▌ ✖ 19m   opencode  demo-worktree   agents:24.0   API error:··││                                                                          ││</text>
+<text x="16" y="257">▌ ✖ 19m   opencode  demo-worktree   agents:19.0   API error:··││                                                                          ││</text>
+<text x="16" y="276">▌ ✖ 19m   opencode  demo-worktree   agents:14.0   API error:··││                                                                          ││</text>
+<text x="16" y="295">▌ ✖ 19m   opencode  demo-worktree   agents:9.0    API error:··││                                                                          ││</text>
+<text x="16" y="314">▌ ✖ 19m   opencode  demo-worktree   agents:4.0    API error:··││                                                                          ││</text>
+<text x="16" y="333">▌ ◐ 19m   codex     demo-worktree   agents:27.0   You: Revie··││                                                                          ││</text>
+<text x="16" y="352">▌ ◐ 19m   codex     demo-worktree   agents:22.0   You: Revie··││                                                                          ││</text>
+<text x="16" y="371">▌ ◐ 19m   codex     demo-worktree   agents:17.0   You: Revie··││                                                                          ││</text>
+<text x="16" y="390">▌ ◐ 19m   codex     demo-worktree   agents:12.0   You: Revie··││                                                                          ││</text>
+<text x="16" y="409">▌ ◐ 19m   codex     demo-worktree   agents:7.0    You: Revie··││                                                                          ││</text>
+<text x="16" y="428">▌ ◐ 20m   codex     demo-worktree   agents:2.0    You: Revie··││                                                                          ││</text>
+<text x="16" y="447">▌ ✔ 19m   claude    demo-worktree   agents:28.0   Fixed the ··││                                                                          ││</text>
+<text x="16" y="466">▌ ✔ 19m   claude    demo-worktree   agents:23.0   Fixed the ··││                                                                           │</text>
+<text x="16" y="485">▌ ✔ 19m   claude    demo-worktree   agents:18.0   Fixed the ··││                                                                           │</text>
+<text x="16" y="504">▌ ✔ 19m   claude    demo-worktree   agents:13.0   Fixed the ··││                                                                           │</text>
+<text x="16" y="523">▌ ✔ 19m   claude    demo-worktree   agents:8.0    Fixed the ··││                                                                           │</text>
+<text x="16" y="542">▌ ✔ 19m   claude    demo-worktree   agents:3.0    Fixed the ··││                                                                           │</text>
+<text x="16" y="561">▌ · 19m   claude    demo-worktree   agents:30.0   Completed ··││                                                                           │</text>
+<text x="16" y="580">▌ · 19m   claude    demo-worktree   agents:25.0   Completed ··││                                                                           │</text>
+<text x="16" y="599">▌ · 19m   claude    demo-worktree   agents:20.0   Completed ·· │                                                                           │</text>
+<text x="16" y="618">▌ · 19m   claude    demo-worktree   agents:15.0   Completed ·· ╰───────────────────────────────────────────────────────────────────────────╯</text>
+</g></svg>
