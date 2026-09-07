@@ -55,6 +55,12 @@ else
   pane=$(tmx new-window -d -P -F '#{pane_id}' -t "$name:" -c "$path" -n "$agent" "$launch") || exit 1
  else pane=$(tmx new-session -d -P -F '#{pane_id}' -s "$name" -c "$path" "$launch") || exit 1; fi
 fi
+# Set startup evidence only while no hook has claimed the pane. The tmux
+# condition and option writes execute together, avoiding a first-hook overwrite.
+agent_type=${agent##*/}
+launch_ts=$(date +%s)
+tracking="set-option -p -t $pane @agent_type $(bonsai_shell_quote "$agent_type"); set-option -p -t $pane @agent_state unknown; set-option -p -t $pane @agent_launch_ts $launch_ts"
+tmx if-shell -F -t "$pane" '#{==:#{@agent_type},}' "$tracking"
 printf '%s\n' "$pane"
 if [ -n "$prompt" ]; then
  start=$SECONDS

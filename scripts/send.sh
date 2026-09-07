@@ -13,13 +13,13 @@ done
 [ -n "$target" ] && [ "$supplied" = on ] || { echo 'usage: bonsai send --to PANE|@waiting|@idle|@all|@branch:NAME TEXT [--yes]' >&2; exit 2; }
 case "$target" in
  @waiting|@idle|@all|@branch:*)
-  panes=$("$BONSAI_SCRIPTS/list.sh" --json | jq -r --arg target "$target" '.[]|
+  panes=$("$BONSAI_SCRIPTS/list.sh" --json | jq -r --arg target "$target" '.[]|select(.state=="waiting" or .state=="done" or .state=="idle" or .state=="stopped")|
    select($target=="@all" or ($target=="@waiting" and .state=="waiting") or ($target=="@idle" and .state=="idle")
    or (($target|startswith("@branch:")) and .branch==($target|ltrimstr("@branch:"))))|.pane_id') || exit 1;;
  @*) echo "unknown agent group: $target" >&2; exit 2;;
  *) panes=$(tmx display-message -p -t "$target" '#{pane_id}') || exit 1;;
 esac
-[ -n "$panes" ] || { echo 'bonsai send: no matching agents' >&2; exit 1; }
+[ -n "$panes" ] || { echo 'bonsai send: no matching agents ready for input' >&2; exit 1; }
 if [ "$yes" != on ]; then
  printf 'Send literally to these panes:\n%s\n\n%s\nConfirm [y/N]: ' "$panes" "$text"
  IFS='' read -r answer || exit 1; case "$answer" in y|Y|yes) :;; *) exit 1;; esac

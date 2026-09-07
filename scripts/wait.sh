@@ -18,9 +18,16 @@ timeout=$(bonsai_duration "$timeout") || exit 2
 start=$SECONDS
 while :; do
  if [ -n "$pane" ]; then
+  if [ "$desired" = idle ] || [ "$desired" = exited ]; then
+   snapshot=$("$BONSAI_SCRIPTS/list.sh" --json --all | jq --arg pane "$pane" '[.[]|select(.pane_id==$pane)]') || exit 1
+   if [ "$snapshot" = '[]' ] && [ "$desired" = exited ]; then
+    snapshot=$(jq -n --arg pane "$pane" '[{pane_id:$pane,state:"exited"}]')
+   fi
+  else
   record=$(tmx display-message -p -t "$pane" '#{pane_id} #{@agent_state}' 2>/dev/null) || record="$pane exited"
   read -r id current <<< "$record"
   snapshot=$(jq -n --arg pane "$id" --arg state "$current" '[{pane_id:$pane,state:$state}]')
+  fi
  else snapshot=$("$BONSAI_SCRIPTS/list.sh" --json --branch "$branch") || exit 1; fi
  if printf '%s' "$snapshot" | jq -e --arg desired "$desired" 'length>0 and all(.state==$desired or ($desired=="done" and .state=="idle"))' >/dev/null; then
   if [ "$json" = on ]; then printf '%s\n' "$snapshot"; else printf '%s\n' "$snapshot" | jq -r '.[]|"\(.pane_id) \(.state)"'; fi

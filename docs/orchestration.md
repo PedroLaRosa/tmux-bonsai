@@ -41,7 +41,7 @@ bonsai send --to @all 'Summarize your progress.' --yes
 
 `list --json` returns an array. Records include pane/session/window IDs, location, agent, current and raw state, state/seen timestamps, age, unread flag, working directory, repository, branch, prompt, message, pending question, tool, session ID, model/context metadata, liveness, and resumability. `--branch NAME` and `--state STATE` filter it. `--counts` prints eight integers: waiting, error, working, unread done, all done, idle, exited, unknown. `--rows` is the board's internal eight-field unit-separated format.
 
-`send` supports one pane, `@waiting`, `@idle`, `@all`, or `@branch:NAME`; it prints the selected destinations before asking for confirmation. `reply` and `send` both require confirmation unless `--yes` is supplied. Use `--no-enter` to type without submitting. To send text that starts with a flag, put `--` before the text:
+`send` supports one pane, `@waiting`, `@idle`, `@all`, or `@branch:NAME`; it prints the selected destinations before asking for confirmation. `reply` accepts waiting, done, idle, or stopped agents; it rejects working, unknown, and shell panes even with `--yes`. Group sends select agents ready for input. `reply` and `send` both require confirmation unless `--yes` is supplied. Use `--no-enter` to type without submitting. To send text that starts with a flag, put `--` before the text:
 
 ```bash
 bonsai reply %3 --yes --no-enter -- '--help'

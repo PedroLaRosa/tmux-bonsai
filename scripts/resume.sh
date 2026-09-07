@@ -13,5 +13,5 @@ case "$agent" in claude) command=(claude --resume "$session");; opencode) comman
  *) echo "Resume is not supported for $agent." >&2; exit 1;; esac
 command -v "${command[0]}" >/dev/null || { echo "$agent is not installed" >&2; exit 1; }
 printf -v launch '%q ' "${command[@]}"
-if [ "$yes" = on ]; then exec "$BONSAI_SCRIPTS/reply.sh" "$pane" --yes -- "$launch"
-else exec "$BONSAI_SCRIPTS/reply.sh" "$pane" -- "$launch"; fi
+if [ "$yes" = on ]; then exec "$BONSAI_SCRIPTS/reply.sh" "$pane" --resume --yes -- "$launch"
+else exec "$BONSAI_SCRIPTS/reply.sh" "$pane" --resume -- "$launch"; fi

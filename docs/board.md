@@ -54,3 +54,5 @@ set -ag status-right ' #(/absolute/path/tmux-bonsai/scripts/status.sh)'
 The collector uses one tmux snapshot, one process snapshot, and a cache per working directory keyed by its resolved Git HEAD. Once an agent process has been observed, returning to its shell displays it as exited. A pane with hook metadata but no observed process is allowed to remain fresh until `stale-after`, avoiding false exits during CLI startup. The default stale threshold is six hours. Shell panes are hidden unless requested. State cache and listener files live under `@bonsai-state-dir` and are private to your user.
 
 Run `bash tests/manual/board-capture.sh` to reproduce the 30-pane collector benchmark, verify a live push refresh, and regenerate the terminal capture. Timings are printed for the current machine.
+
+A local macOS run with 30 mixed panes measured a 97 ms warm median collector refresh and a 123 ms visible push refresh. Cold collection took 117 ms; warm samples ranged up to 108 ms. These are observations, not timing guarantees; startup Git discovery and host process load affect the results.

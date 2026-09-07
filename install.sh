@@ -35,7 +35,8 @@ if [ "$install_bin" = on ]; then
   fi
 fi
 
-if [ -f "$TMUX_CONF" ] && grep -qF "$DEST/bonsai.tmux" "$TMUX_CONF"; then
+loader_line="run-shell $(bonsai_tmux_quote "$(bonsai_shell_quote "$DEST/bonsai.tmux")")"
+if [ -f "$TMUX_CONF" ] && { grep -qFx "$loader_line" "$TMUX_CONF" || grep -qF "$DEST/bonsai.tmux" "$TMUX_CONF"; }; then
   echo "  ✓ $TMUX_CONF already loads the plugin"
 else
   {
@@ -43,13 +44,13 @@ else
     echo "# tmux-bonsai"
     echo "set -g @bonsai-key     'W'"
     echo "set -g @bonsai-agent   'claude'"
-    printf 'run-shell %s\n' "$(bonsai_tmux_quote "$(bonsai_shell_quote "$DEST/bonsai.tmux")")"
+    printf '%s\n' "$loader_line"
   } >> "$TMUX_CONF"
   echo "  ✓ appended config + loader to $TMUX_CONF"
 fi
 
-if tmux info >/dev/null 2>&1; then
-  tmux source-file "$TMUX_CONF" >/dev/null 2>&1 && echo "  ✓ reloaded running tmux"
+if tmx info >/dev/null 2>&1; then
+  tmx source-file "$TMUX_CONF" >/dev/null 2>&1 && echo "  ✓ reloaded running tmux"
 fi
 
 echo ""
@@ -60,7 +61,7 @@ printf '  fzf           : %s\n' "$(command -v fzf   || echo 'NOT FOUND - needed 
 printf '  jq            : %s\n' "$(command -v jq    || echo 'NOT FOUND - needed for agent state')"
 printf '  curl          : %s\n' "$(command -v curl  || echo 'NOT FOUND - needed for live board refresh')"
 
-KEY="$(tmux show-option -gqv @bonsai-key 2>/dev/null)"; KEY="${KEY:-W}"
+KEY="$(tmx show-option -gqv @bonsai-key 2>/dev/null)"; KEY="${KEY:-W}"
 echo ""
 echo "Done. Open the menu with:  <prefix> + $KEY"
 echo 'Open Notifications → setup / repair agent hooks to enable agent alerts.'

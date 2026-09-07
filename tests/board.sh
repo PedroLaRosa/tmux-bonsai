@@ -37,10 +37,16 @@ assert_eq 124 "$result"
 assert_jq "$(cat "$TMP/timeout.json")" '.error=="timeout"'
 # Literal text that resembles key names and shell substitution stays in the TTY.
 input_pane=$(tmx new-window -d -P -F '#{pane_id}' 'cat')
+tmx set -p -t "$input_pane" @agent_type manual \; set -p -t "$input_pane" @agent_state idle
 literal='C-c $(touch /tmp/bonsai-must-not-exist) "quoted"'
 "$BONSAI_SCRIPTS/reply.sh" "$input_pane" --yes -- "$literal"
 sleep 0.1
 assert_contains "$("$BONSAI_SCRIPTS/capture.sh" "$input_pane")" "$literal"
+# Working/shell agents cannot receive a reply even with --yes.
+if "$BONSAI_SCRIPTS/reply.sh" "$shell_pane" --yes blocked >/dev/null 2>&1; then echo 'reply allowed a shell' >&2; exit 1; fi
+tmx set -p -t "$input_pane" @agent_state working
+if "$BONSAI_SCRIPTS/reply.sh" "$input_pane" --yes blocked >/dev/null 2>&1; then echo 'reply allowed a working agent' >&2; exit 1; fi
+tmx set -p -t "$input_pane" @agent_state idle
 # Refusal has no side effects.
 printf 'n\n' | "$BONSAI_SCRIPTS/reply.sh" "$input_pane" refused >/dev/null && { echo 'reply refusal unexpectedly succeeded' >&2; exit 1; }
 # Shell snapshots become exited only after the stale threshold, preserving fresh hooks.
@@ -107,3 +113,48 @@ printf '1\n' > "$ports_dir/99999999"
 BONSAI_SOCKET="$other_socket" "$BONSAI_SCRIPTS/board.sh" --refresh
 [ -f "$ports_dir/99999999" ]
 tmux -S "$other_socket" kill-server
+
+# Verification belongs to the backend that was actually tested.
+tmx set -g @bonsai-notify on \; set -g @bonsai-notify-backend command \; set -g @bonsai-notify-command /usr/bin/true
+printf '{"ts":%s,"backend":"command","outcome":"verified"}\n' "$(date +%s)" > "$(bonsai_state_dir)/notify-verify"
+case "$("$BONSAI_SCRIPTS/status.sh")" in *'!'*) echo 'current verification rejected' >&2; exit 1;; esac
+tmx set -g @bonsai-notify-backend none
+assert_contains "$("$BONSAI_SCRIPTS/status.sh")" '!'
+assert_contains "$("$BONSAI_SCRIPTS/board.sh" --header)" 'notifications unverified'
+tmx set -g @bonsai-notify off
+
+# Feed rows and JSON read the real hydrated log record, including nested notify.
+. "$BONSAI_SCRIPTS/_notify.sh"
+feed_pane=$(test_pane)
+tmx set -p -t "$feed_pane" @agent_type claude \; set -p -t "$feed_pane" @agent_state 'done' \; set -p -t "$feed_pane" @agent_msg 'A completed task'
+: > "$(bonsai_state_dir)/events.jsonl"
+bonsai_log "$feed_pane" Stop working 'done' finished delivered command test-delivered
+bonsai_log "$feed_pane" Stop working 'done' finished cooldown command test-suppressed
+assert_jq "$("$BONSAI_SCRIPTS/feed.sh" --json)" 'length==2 and .[0].notify.decision=="cooldown"'
+assert_jq "$("$BONSAI_SCRIPTS/feed.sh" --json --why)" 'length==1 and .[0].notify.decision=="cooldown"'
+assert_contains "$("$BONSAI_SCRIPTS/feed.sh" --rows)" 'delivered (command)'
+why_rows=$("$BONSAI_SCRIPTS/feed.sh" --rows --why)
+assert_contains "$why_rows" 'cooldown (command)'
+case "$why_rows" in *'delivered'*) echo 'why feed includes delivered record' >&2; exit 1;; esac
+# Replace only the streaming file follower: exercise the actual tail formatter
+# and JSON filter without leaving a long-running tail process in the test suite.
+tail() { local file; for file in "$@"; do :; done; cat "$file"; }
+export -f tail
+assert_contains "$("$BONSAI_SCRIPTS/feed.sh" --tail)" 'delivered (command)'
+assert_jq "$("$BONSAI_SCRIPTS/feed.sh" --tail --json --why | jq -s .)" 'length==1 and .[0].notify.decision=="cooldown"'
+assert_contains "$("$BONSAI_SCRIPTS/feed.sh" --tail --rows --why)" 'cooldown (command)'
+unset -f tail
+
+# Terminal activation accepts an explicit bundle ID and shares auto detection.
+tmx set -g @bonsai-terminal com.googlecode.iterm2
+assert_eq com.googlecode.iterm2 "$(bonsai_terminal)"
+# Stub the activation command so this regression never opens a desktop app.
+open() { printf '%s\n' "$*" > "$TMP/jump-open"; }
+uname() { printf 'Darwin\n'; }
+export TMP
+export -f open uname
+"$BONSAI_SCRIPTS/jump.sh" "$feed_pane"
+assert_eq '-b com.googlecode.iterm2' "$(cat "$TMP/jump-open")"
+unset -f open uname
+tmx set -g @bonsai-terminal auto
+tmx kill-pane -t "$feed_pane"

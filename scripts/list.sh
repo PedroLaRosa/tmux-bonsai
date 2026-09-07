@@ -3,11 +3,15 @@
 set -uo pipefail
 umask 077
 . "$(dirname "$0")/_lib.sh"
-mode=table all=$(bonsai_opt @bonsai-board-show-shells off) sort=$(bonsai_opt @bonsai-board-sort state)
+us=$'\037'
+options=$(tmx display-message -p "#{@bonsai-board-show-shells}$us#{@bonsai-board-sort}$us#{@bonsai-state-dir}$us#{@bonsai-idle-after}$us#{@bonsai-stale-after}$us#{@bonsai-glyphs}" 2>/dev/null) || options=''
+IFS="$us" read -r all sort state_root idle_setting stale_setting glyph_setting <<< "$options"
+mode=table all=${all:-off} sort=${sort:-state} compact=off
+state_root=${state_root:-${XDG_STATE_HOME:-$HOME/.local/state}/tmux-bonsai}
 state_filter='' branch_filter=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --json) mode=json;; --rows) mode=rows;; --counts) mode=counts;; --all) all=on;;
+    --compact) compact=on;; --json) mode=json;; --rows) mode=rows;; --counts) mode=counts;; --all) all=on;;
     --sort|--state|--branch)
       [ "$#" -ge 2 ] || { echo "bonsai list: $1 needs a value" >&2; exit 2; }
       case "$1" in --sort) sort=$2;; --state) state_filter=$2;; --branch) branch_filter=$2;; esac; shift;;
@@ -15,8 +19,7 @@ while [ "$#" -gt 0 ]; do
   esac; shift
 done
 command -v jq >/dev/null || { echo 'bonsai list requires jq' >&2; exit 1; }
-us=$'\037'
-cache="$(bonsai_state_dir)/cache"
+cache="$state_root/cache"
 known_cache="$cache/agent-pids-$(bonsai_server_key)"
 mkdir -p "$cache"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/bonsai-list.XXXXXX") || exit 1
@@ -24,7 +27,7 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 # Sanitize option controls before adding record separators.
 fmt='#{pane_id}'
 controls=$'\001-\037\177'
-for field in session_name session_id window_name window_id pane_index pane_current_path pane_pid pane_current_command @agent_type @agent_state @agent_state_ts @agent_updated_ts @agent_seen_ts @agent_prompt @agent_msg @agent_ask @agent_tool @agent_session @agent_children @agent_model @agent_ctx pane_dead @agent_hook_ts; do
+for field in session_name session_id window_name window_id pane_index pane_current_path pane_pid pane_current_command @agent_type @agent_state @agent_state_ts @agent_updated_ts @agent_seen_ts @agent_prompt @agent_msg @agent_ask @agent_tool @agent_session @agent_children @agent_model @agent_ctx pane_dead @agent_hook_ts window_index @agent_launch_ts; do
   fmt="$fmt$us#{s|[$controls]| |:$field}"
 done
 tmx list-panes -a -F "$fmt" > "$tmp/panes" 2>/dev/null || :
@@ -32,7 +35,8 @@ ps -eo pid=,ppid=,comm=,args='' > "$tmp/ps" 2>/dev/null || :
 awk -v FS="$us" '
  NR==FNR {panes[$8]=1; next}
  {line=$0; gsub(/^[ \t]+/, "", line); n=split(line,a,/[ \t]+/); parent[a[1]]=a[2];
-  command=a[3]; sub(/^.*\//,"",command); kind="";
+  command=a[3]; native_claude=(command ~ /\/claude\/versions\//); sub(/^.*\//,"",command); kind="";
+  if(native_claude) kind="claude";
   if(command ~ /^(claude|codex|opencode|gemini|cursor-agent|copilot|droid|aider)$/) kind=command;
   if(command ~ /^(node|bun|python[0-9.]*)$/) {
    for(i=4;i<=n;i++) if(a[i] ~ /(^|\/)(claude|codex|opencode|gemini|cursor-agent|copilot|droid|aider)(\.[cm]?js)?$/) {
@@ -49,7 +53,7 @@ awk -F "$us" '!seen[$7]++ {print $7}' "$tmp/panes" > "$tmp/paths"
 : > "$tmp/branches"
 while IFS='' read -r cwd; do
   [ -n "$cwd" ] || continue
-  key=$(printf '%s' "$cwd" | cksum | awk '{print $1}')
+  read -r key _ <<< "$(printf '%s' "$cwd" | cksum)"
   entry="$cache/branch-$key"
   head='' branch='' repo='' cached_cwd=''
   if [ -f "$entry" ]; then
@@ -76,12 +80,13 @@ fi
 : > "$tmp/known"
 [ ! -f "$known_cache" ] || cat "$known_cache" > "$tmp/known"
 now=$(date +%s)
-idle=$(bonsai_duration "$(bonsai_opt @bonsai-idle-after 30m)")
-stale=$(bonsai_duration "$(bonsai_opt @bonsai-stale-after 6h)")
 jq -n --rawfile panes "$tmp/panes" --rawfile processes "$tmp/processes" \
  --rawfile branches "$tmp/branches" --rawfile offline "$tmp/offline" --rawfile known "$tmp/known" \
- --argjson now "$now" --argjson idle "${idle:-1800}" --argjson stale "${stale:-21600}" \
+ --argjson now "$now" --arg idle_setting "${idle_setting:-30m}" --arg stale_setting "${stale_setting:-6h}" \
  --arg all "$all" --arg sort "$sort" --arg sf "$state_filter" --arg bf "$branch_filter" '
+ def duration: capture("^(?<n>[0-9]+(?:\\.[0-9]+)?)(?<u>[smh]?)$") |
+  (.n|tonumber) * (if .u=="h" then 3600 elif .u=="m" then 60 else 1 end);
+ ($idle_setting|duration) as $idle | ($stale_setting|duration) as $stale |
  def lines: split("\n") | map(select(length>0)|split("\u001f"));
  def number: tonumber? // 0;
  ($known|split("\n")) as $known |
@@ -92,7 +97,7 @@ jq -n --rawfile panes "$tmp/panes" --rawfile processes "$tmp/processes" \
    cwd:.[6],pid:.[7],command:.[8],agent:.[9],raw_state:.[10],state_ts:(.[11]|number),
    updated_ts:(.[12]|number),seen_ts:(.[13]|number),prompt:.[14],message:.[15],ask:.[16],
    tool:.[17],agent_session:.[18],children:(.[19]|number),model:.[20],context:.[21],
-   dead:(.[22]=="1"),hook_ts:(.[23]|number)} |
+   dead:(.[22]=="1"),hook_ts:(.[23]|number),window_index:(.[24]|number),launch_ts:(.[25]|number)} |
   .updated_ts=([.updated_ts,.hook_ts,.state_ts]|max) |
   .branch=($b[.cwd].branch//"") | .repo=($b[.cwd].repo//"") |
   .alive=($p[.pid]!=null) |
@@ -101,12 +106,13 @@ jq -n --rawfile panes "$tmp/panes" --rawfile processes "$tmp/processes" \
   select(.agent!="" or .raw_state!="" or $all=="on") |
   .state=(if .raw_state!="" then .raw_state elif .alive then "unknown" else "shell" end) |
   .age=([$now-.state_ts,0]|max) |
+  .starting=(.state=="unknown" and .launch_ts>0 and $now-.launch_ts<30) |
   (.pid) as $pid |
   (if .dead or (.alive==false and ($known|index($pid))!=null) or (.agent!="" and .alive==false and .state_ts>0 and .age>$stale) then .state="exited"
    elif .state=="done" and .age>$idle then .state="idle" else . end) |
   .unseen=(.state_ts>0 and .seen_ts<.state_ts) |
   .resumable=(.state=="exited" and .agent_session!="") |
-  .location=(.session+":"+.window+"."+(.pane_index|tostring))
+  .location=(.session+":"+(.window_index|tostring)+"."+(.pane_index|tostring))
  )) as $live |
  ($live + (if $all=="on" then ($offline|lines|map(. as $w |
   select([$live[]|select(.cwd==$w[0])]|length==0) |
@@ -132,18 +138,21 @@ case "$mode" in
   ([.[]|select(.state=="done")]|length),([.[]|select(.state=="idle")]|length),
   ([.[]|select(.state=="exited")]|length),([.[]|select(.state=="unknown")]|length)]|join(" ")' "$tmp/json";;
  rows|table)
-  BONSAI_GLYPHS=$(bonsai_opt @bonsai-glyphs unicode)
+  BONSAI_GLYPHS=${glyph_setting:-unicode}
   export BONSAI_GLYPHS
-  glyphs=$(for state in waiting working 'done' idle error stopped exited unknown; do printf '%s\037%s\n' "$state" "$(bonsai_glyph "$state")"; done)
-  jq -r --arg glyphs "$glyphs" --arg mode "$mode" '
+  glyphs=$(for state in waiting working 'done' idle error stopped exited unknown; do printf '%s\037' "$state"; bonsai_glyph "$state"; printf '\n'; done)
+  jq -r --arg glyphs "$glyphs" --arg mode "$mode" --arg compact "$compact" '
    def glyph: .state as $s | ($glyphs|split("\n")|map(split("\u001f")|{key:.[0],value:.[1]})|from_entries)[$s]//"·";
+   def pad($width): . + (" " * ([$width-length,1]|max));
    def colour: if .state=="waiting" then "\u001b[33m" elif .state=="error" then "\u001b[31m"
     elif .state=="working" then "\u001b[36m" elif .state=="done" and .unseen then "\u001b[1;32m" else "\u001b[0m" end;
    def age: if .state_ts==0 then "—" elif .age<60 then "\(.age)s" elif .age<3600 then "\((.age/60)|floor)m"
     elif .age<86400 then "\((.age/3600)|floor)h" else "\((.age/86400)|floor)d" end;
-   def preview: if .state=="waiting" and .ask!="" then .ask elif .state=="working" and .tool!="" then "Using "+.tool
+   def preview: if .starting then "starting…" elif .state=="waiting" and .ask!="" then .ask elif .state=="working" and .tool!="" then "Using "+.tool
     elif .state=="working" and .prompt!="" then "You: "+.prompt elif .message!="" then .message
     elif .resumable then "exited · resumable" elif .state=="unknown" then "no hooks — run Setup" else .state end;
-   .[] | if $mode=="rows" then [.pane_id,(.sortkey|tojson),((colour)+(glyph)+" "+age+"\u001b[0m"),.agent,.branch,.location,((colour)+preview+"\u001b[0m"),(.unseen|tostring)]|join("\u001f")
+   .[] | if $mode=="rows" then [.pane_id,(.sortkey|tojson),((colour)+(((glyph)+" "+age)|pad(8))+"\u001b[0m"),(.agent|pad(10)),
+    ((if $compact=="on" then .branch[-14:] else .branch end)|pad(16)),(.location|pad(14)),
+    ((colour)+preview+(if $compact=="on" and (.branch|length)>14 then " · "+.branch else "" end)+"\u001b[0m"),(.unseen|tostring)]|join("\u001f")
    else [(glyph),age,.agent,.branch,.location,preview]|join("  ") end' "$tmp/json";;
 esac

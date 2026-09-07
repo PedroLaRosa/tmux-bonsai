@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 umask 077
-. "$(dirname "$0")/_lib.sh"
+. "$(dirname "$0")/_notify.sh"
 state_dir=$(bonsai_state_dir)
 server_key=$(bonsai_server_key)
 ports="$state_dir/board-ports/$server_key"
@@ -11,6 +11,9 @@ self=$(printf '%q' "$BONSAI_SCRIPTS/board.sh")
 # A board owns its view preferences and port registration, even with many clients.
 board_header() {
  local counts waiting errors working done_unseen rest compact=off all sort
+ local BONSAI_GLYPHS
+ BONSAI_GLYPHS=$(bonsai_opt @bonsai-glyphs unicode)
+ export BONSAI_GLYPHS
  if [ -n "${1:-}" ] && [ -f "$views/$1" ]; then read -r all sort compact < "$views/$1"; fi
  counts=$(tmx list-panes -a -F '#{@agent_type} #{@agent_state} #{@agent_state_ts} #{@agent_seen_ts}' 2>/dev/null | awk '
   $1!="" && $2=="waiting" {w++} $2=="error" {e++} $2=="working" {r++} $2=="done" && $3+0>$4+0 {d++}
@@ -19,13 +22,15 @@ board_header() {
  printf '%s %s needs you · %s %s · %s %s working · %s %s done\n' "$(bonsai_glyph waiting)" "$waiting" "$(bonsai_glyph error)" "$errors" "$(bonsai_glyph working)" "$working" "$(bonsai_glyph 'done')" "$done_unseen"
  if [ "$compact" = on ]; then printf 'enter jump · ^r reply · ? help'; return; fi
  printf 'enter jump · ^r reply · ^y yes · ^u unread · ^x kill · ^e resume · ^n/^b needs you · ^a all · ^l sort · ? help'
- if [ "$(bonsai_opt @bonsai-notify on)" = on ] && { [ ! -f "$state_dir/notify-verify" ] || ! grep -Eq '(delivered|displayed|verified)' "$state_dir/notify-verify"; }; then printf '\n! notifications unverified'; fi
+ if [ "$(bonsai_opt @bonsai-notify on)" = on ] && ! bonsai_verification_current; then printf '\n! notifications unverified'; fi
 }
 view_rows() {
  local view=${1:-} all=off sort=state compact=off
  if [ -n "$view" ] && [ -f "$views/$view" ]; then read -r all sort compact < "$views/$view"; fi
- if [ "$all" = on ]; then "$BONSAI_SCRIPTS/list.sh" --rows --all --sort "$sort"
- else "$BONSAI_SCRIPTS/list.sh" --rows --sort "$sort"; fi
+ local args=(--rows --sort "$sort")
+ [ "$all" != on ] || args+=(--all)
+ [ "$compact" != on ] || args+=(--compact)
+ "$BONSAI_SCRIPTS/list.sh" "${args[@]}"
 }
 case "${1:-}" in
  --ports-dir) printf '%s\n' "$ports"; exit;;
@@ -54,8 +59,8 @@ case "${1:-}" in
   else case "$sort" in state) sort=recent;; recent) sort=age;; *) sort=state;; esac; fi
   printf '%s %s %s\n' "$all" "$sort" "$compact" > "$views/$pid"; exit;;
  --navigate)
-  pid=${2:-}; direction=${3:-next}; current=${4:-}
-  action=$(view_rows "$pid" | awk -F '\037' -v current="$current" -v direction="$direction" '
+  pid=${2:-}; direction=${3:-next}; current=${4:-}; query=${5:-}
+  action=$(view_rows "$pid" | fzf --filter "$query" --no-sort --ansi --delimiter $'\037' --nth '4..7' | awk -F '\037' -v current="$current" -v direction="$direction" '
    $1==current {selected=NR} $2 ~ /^\[0,/ {positions[++n]=NR}
    END {if(!n) exit; result=positions[1];
     if(direction=="previous") {result=positions[n]; for(i=n;i>0;i--) if(positions[i]<selected){result=positions[i];break}}
@@ -69,8 +74,23 @@ case "${1:-}" in
  --preview)
   pane=${2:-}
   case "$pane" in worktree:*) printf 'Offline worktree: %s\nEnter opens a session.\n' "${pane#worktree:}"; exit;; esac
-  "$BONSAI_SCRIPTS/list.sh" --json --all | jq -r --arg pane "$pane" '.[]|select(.pane_id==$pane)|
-   "\(.agent) · \(.state) · \(.age)s\n\(.location) · \(.branch)\n\(.repo)\nYou: \(.prompt)\nAgent: \(.message)\nAsk: \(.ask)\nModel: \(.model) · context \(.context)% · children \(.children)\n"'
+  # Preview reads only its pane; a second full process/git scan would compete
+  # with the board reload on every pushed event.
+  facts=$(tmx display-message -p -t "$pane" '#{pane_current_path}
+#{@agent_type} · #{@agent_state} · since #{t:@agent_state_ts}
+#{session_name}:#{window_index}.#{pane_index}
+You: #{@agent_prompt}
+Agent: #{@agent_msg}
+Ask: #{@agent_ask}
+Model: #{@agent_model} · context #{@agent_ctx}% · children #{@agent_children}') || exit 1
+  cwd=${facts%%$'\n'*}; facts=${facts#*$'\n'}
+  read -r key _ <<< "$(printf '%s' "$cwd" | cksum)"
+  branch='' repo=$cwd
+  entry="$state_dir/cache/branch-$key"
+  if [ -f "$entry" ]; then
+   { IFS= read -r _; IFS= read -r _; IFS= read -r branch; IFS= read -r repo; } < "$entry"
+  fi
+  printf '%s · %s\n%s\n\n' "$branch" "$repo" "$facts"
   "$BONSAI_SCRIPTS/capture.sh" "$pane"; exit;;
  --unread)
   pane=${2:-}; seen=$(tmx show-option -pqv -t "$pane" @agent_seen_ts); ts=$(tmx show-option -pqv -t "$pane" @agent_state_ts)
@@ -136,13 +156,15 @@ args+=(--bind "ctrl-x:execute($(script kill.sh) {1})+reload($reload)")
 args+=(--bind "ctrl-e:execute($(script resume.sh) {1})+reload($reload)")
 args+=(--bind "ctrl-a:execute-silent($self --toggle-all $$)+reload($reload)")
 args+=(--bind "ctrl-l:execute-silent($self --cycle-sort $$)+reload($reload)")
-args+=(--bind "ctrl-n:execute-silent($self --navigate $$ next {1}),ctrl-b:execute-silent($self --navigate $$ previous {1})")
+args+=(--bind "ctrl-n:execute-silent($self --navigate $$ next {1} {q}),ctrl-b:execute-silent($self --navigate $$ previous {1} {q})")
 args+=(--bind "ctrl-o:execute-silent($(script notify-menu.sh)),?:execute($self --help --pause)")
 if [ "$compact" = on ]; then
  args+=(--with-nth '3,5,7' --header 'enter jump · ^r reply · ? help' --no-info)
 else args+=(--preview "$self --preview {1}" --preview-window 'right:55%:wrap' --bind 'ctrl-p:toggle-preview'); fi
 version=$(fzf --version | awk '{split($1,v,".");print v[1]*100+v[2]}')
 if [ "${version:-0}" -ge 38 ]; then args+=(--track); fi
+# New fzf releases can track the hidden pane ID even when ages/text change.
+if fzf --help | grep -q -- '--id-nth'; then args+=(--id-nth 1); fi
 if [ "${version:-0}" -ge 36 ] && command -v curl >/dev/null; then
  args+=(--listen 0 --bind "start:execute-silent($self --register \$FZF_PORT)")
  interval=$(bonsai_duration "$(bonsai_opt @bonsai-board-refresh 2)")

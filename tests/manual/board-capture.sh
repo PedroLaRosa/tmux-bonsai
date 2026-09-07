@@ -3,16 +3,19 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 export BONSAI_TEST_TMP
-BONSAI_TEST_TMP=$(mktemp -d "${TMPDIR:-/tmp}/bonsai-board-capture.XXXXXX")
+BONSAI_TEST_TMP=$(mktemp -d "/tmp/bonsai-board-capture.XXXXXX")
 export BONSAI_SOCKET="$BONSAI_TEST_TMP/tmux.sock"
 trap 'tmux -S "$BONSAI_SOCKET" kill-server 2>/dev/null || :; rm -rf "$BONSAI_TEST_TMP"' EXIT
 TMUX='' tmux -S "$BONSAI_SOCKET" -f /dev/null new-session -d -s agents -x 140 -y 32
 . "$ROOT/tests/helper.sh"
 setup_test
+mkdir -p "$TMP/demo-project"
+git -C "$TMP/demo-project" init -q
+git -C "$TMP/demo-project" symbolic-ref HEAD refs/heads/demo-worktree
 now=$(date +%s)
 first=''
 for number in $(seq 1 30); do
- pane=$(test_pane "$ROOT")
+ pane=$(test_pane "$TMP/demo-project")
  [ -n "$first" ] || first=$pane
  case "$((number%5))" in
   1) state=waiting; text='Bash: npm test — allow?'; agent=claude;;

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -uo pipefail
-. "$(dirname "$0")/_lib.sh"
+. "$(dirname "$0")/_notify.sh"
 pane=${1:-}
 [ -n "$pane" ] || { echo 'usage: bonsai jump PANE|@next' >&2; exit 2; }
 [ "$pane" != @next ] || exec "$BONSAI_SCRIPTS/next.sh"
@@ -24,18 +24,9 @@ style=$(tmx show-options -pqv -t "$pane" window-style 2>/dev/null)
 tmx select-pane -t "$pane" -P 'bg=colour237' 2>/dev/null || :
 ( sleep 0.15; tmx select-pane -t "$pane" -P "${style:-default}" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
 tmx display-message "bonsai: jumped to $pane"
-terminal=$(bonsai_opt @bonsai-terminal auto)
-if [ "$terminal" = auto ]; then
- terminal=$(tmx show-environment -g TERM_PROGRAM 2>/dev/null); terminal=${terminal#TERM_PROGRAM=}
-fi
+terminal=$(bonsai_terminal)
 if [ "$(uname)" = Darwin ]; then
- case "$terminal" in
-  iTerm.app|iterm2) bundle=com.googlecode.iterm2;; Apple_Terminal|Terminal) bundle=com.apple.Terminal;;
-  ghostty|Ghostty) bundle=com.mitchellh.ghostty;; WezTerm|wezterm) bundle=com.github.wez.wezterm;;
-  kitty) bundle=net.kovidgoyal.kitty;; Alacritty|alacritty) bundle=org.alacritty;;
-  WarpTerminal|Warp) bundle=dev.warp.Warp-Stable;; vscode) bundle=com.microsoft.VSCode;; *) bundle='';;
- esac
- [ -z "$bundle" ] || open -b "$bundle" >/dev/null 2>&1 || :
+ [ -z "$terminal" ] || open -b "$terminal" >/dev/null 2>&1 || :
 elif [ -n "${WINDOWID:-}" ] && command -v xdotool >/dev/null 2>&1; then
  xdotool windowactivate "$WINDOWID" >/dev/null 2>&1 || :
 fi
