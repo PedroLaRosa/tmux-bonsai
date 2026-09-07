@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+. "$(dirname "$0")/helper.sh"
+setup_test
+p1=$(test_pane)
+p2=$(test_pane)
+p3=$(test_pane)
+shell_pane=$(test_pane)
+now=$(date +%s)
+tmx set -p -t "$p1" @agent_type claude \; set -p -t "$p1" @agent_state waiting \; set -p -t "$p1" @agent_state_ts "$((now-20))" \; set -p -t "$p1" @agent_ask $'first\037second\nthird'
+tmx set -p -t "$p2" @agent_type codex \; set -p -t "$p2" @agent_state waiting \; set -p -t "$p2" @agent_state_ts "$((now-10))"
+tmx set -p -t "$p3" @agent_type claude \; set -p -t "$p3" @agent_state 'done' \; set -p -t "$p3" @agent_state_ts "$now" \; set -p -t "$p3" @agent_seen_ts 0
+json=$("$BONSAI_SCRIPTS/list.sh" --json)
+assert_jq "$json" ".[0].pane_id==\"$p1\" and .[1].pane_id==\"$p2\""
+assert_jq "$json" "any(.[]; .pane_id==\"$p3\" and .unseen and .state==\"done\")"
+assert_jq "$json" "all(.[]; .pane_id!=\"$shell_pane\")"
+assert_jq "$json" 'all(.[]; (.ask|contains("\u001f") or contains("\n"))|not)'
+rows=$("$BONSAI_SCRIPTS/list.sh" --rows)
+assert_eq 8 "$(printf '%s\n' "$rows" | awk -F '\037' 'NR==1 {print NF}')" 'stable row fields'
+assert_eq '2 0 0 1 1 0 0 0' "$("$BONSAI_SCRIPTS/list.sh" --counts)" counts
+all=$("$BONSAI_SCRIPTS/list.sh" --json --all)
+assert_jq "$all" "any(.[]; .pane_id==\"$shell_pane\" and .state==\"shell\")"
+# A window mirror must not count a shell sibling as a second agent.
+sibling=$(tmx split-window -d -h -P -F '#{pane_id}' -t "$p1" 'sleep 3600')
+tmx set -w -t "$p1" @agent_state waiting
+assert_eq '2 0 0 1 1 0 0 0' "$("$BONSAI_SCRIPTS/list.sh" --counts)" 'window mirror ignored on shell sibling'
+assert_contains "$("$BONSAI_SCRIPTS/status.sh")" '●2'
+assert_contains "$("$BONSAI_SCRIPTS/board.sh" --header)" '2 needs you'
+tmx kill-pane -t "$sibling"
+# A complete state is exposed to scripts; timeout is distinguishable from errors.
+assert_contains "$("$BONSAI_SCRIPTS/wait.sh" --pane "$p3" --for 'done' --timeout 0)" "$p3 done"
+set +e
+"$BONSAI_SCRIPTS/wait.sh" --pane "$p1" --for 'done' --timeout 0 --json > "$TMP/timeout.json"
+result=$?
+set -e
+assert_eq 124 "$result"
+assert_jq "$(cat "$TMP/timeout.json")" '.error=="timeout"'
+# Literal text that resembles key names and shell substitution stays in the TTY.
+input_pane=$(tmx new-window -d -P -F '#{pane_id}' 'cat')
+literal='C-c $(touch /tmp/bonsai-must-not-exist) "quoted"'
+"$BONSAI_SCRIPTS/reply.sh" "$input_pane" --yes -- "$literal"
+sleep 0.1
+assert_contains "$("$BONSAI_SCRIPTS/capture.sh" "$input_pane")" "$literal"
+# Refusal has no side effects.
+printf 'n\n' | "$BONSAI_SCRIPTS/reply.sh" "$input_pane" refused >/dev/null && { echo 'reply refusal unexpectedly succeeded' >&2; exit 1; }
+# Shell snapshots become exited only after the stale threshold, preserving fresh hooks.
+tmx set -p -t "$p3" @agent_state_ts "$((now-30000))" \; set -p -t "$p3" @agent_session test-session
+assert_jq "$("$BONSAI_SCRIPTS/list.sh" --json)" "any(.[]; .pane_id==\"$p3\" and .state==\"exited\" and .resumable)"
+# Fast age updates and event pushes use a prunable registration rather than a daemon.
+ports_dir=$("$BONSAI_SCRIPTS/board.sh" --ports-dir)
+mkdir -p "$ports_dir"
+printf '1\n' > "$ports_dir/99999999"
+"$BONSAI_SCRIPTS/board.sh" --refresh
+[ ! -f "$ports_dir/99999999" ]
+for pane in "$p1" "$p2" "$p3" "$shell_pane" "$input_pane"; do tmx kill-pane -t "$pane"; done
+# An actual fzf TTY catches invalid binding syntax and missing listener exports.
+if command -v fzf >/dev/null && command -v curl >/dev/null; then
+ board_command=$(printf '%q ' "$BONSAI_SCRIPTS/board.sh" --watch --compact)
+ board_pane=$(tmx new-window -d -P -F '#{pane_id}' "$board_command")
+ sleep 0.5
+ assert_contains "$(tmx capture-pane -p -t "$board_pane")" 'agents>'
+ found=0
+ for registration in "$ports_dir/"*; do [ ! -f "$registration" ] || found=1; done
+ assert_eq 1 "$found" 'fzf listener registered'
+ "$BONSAI_SCRIPTS/board.sh" --refresh
+ tmx kill-pane -t "$board_pane"
+fi
+# Spawn and fanout exercise the orchestration flow with a local agent fixture.
+# Worktrees already exist here; creation remains covered by worktrunk itself.
+mkdir -p "$TMP/repo" "$HOME/.local/bin"
+git -C "$TMP/repo" init -q
+git -C "$TMP/repo" -c user.name=Test -c user.email=test@example.invalid commit --allow-empty -qm initial
+git -C "$TMP/repo" worktree add -qb board-worker-one "$TMP/worker-one"
+git -C "$TMP/repo" worktree add -qb board-worker-two "$TMP/worker-two"
+cat > "$HOME/.local/bin/bonsai-test-agent" <<'AGENT'
+#!/usr/bin/env bash
+. "$BONSAI_SCRIPTS/_lib.sh"
+tmx set -p -t "$TMUX_PANE" @agent_type bonsai-test-agent \; set -p -t "$TMUX_PANE" @agent_state idle
+IFS= read -r task
+printf 'received: %s\n' "$task"
+tmx set -p -t "$TMUX_PANE" @agent_state 'done'
+sleep 5
+AGENT
+chmod +x "$HOME/.local/bin/bonsai-test-agent"
+# The test server pre-dates this suite's temporary HOME and PATH.
+tmx set-environment -g BONSAI_SCRIPTS "$BONSAI_SCRIPTS"
+tmx set-environment -g PATH "$HOME/.local/bin:$PATH"
+spawned=$(cd "$TMP/repo" && "$BONSAI_SCRIPTS/spawn.sh" --branch board-worker-one --agent "$HOME/.local/bin/bonsai-test-agent" --prompt 'test prompt' --yes)
+"$BONSAI_SCRIPTS/wait.sh" --pane "$spawned" --for 'done' --timeout 5 >/dev/null
+assert_contains "$("$BONSAI_SCRIPTS/capture.sh" "$spawned")" 'received: test prompt'
+fanout=$(cd "$TMP/repo" && "$BONSAI_SCRIPTS/spawn.sh" --fanout --branches board-worker-one,board-worker-two --agent "$HOME/.local/bin/bonsai-test-agent" --prompt 'shared task' --yes)
+assert_eq 2 "$(printf '%s\n' "$fanout" | wc -l | tr -d ' ')"
+while IFS= read -r pane; do
+ "$BONSAI_SCRIPTS/wait.sh" --pane "$pane" --for 'done' --timeout 5 >/dev/null
+ assert_contains "$("$BONSAI_SCRIPTS/capture.sh" "$pane")" 'received: shared task'
+ tmx kill-pane -t "$pane"
+done <<< "$fanout"
+tmx kill-pane -t "$spawned"
+
+# Servers sharing a state directory must never refresh each other's listener.
+other_socket="$TMP/other.sock"
+TMUX='' tmux -S "$other_socket" -f /dev/null new-session -d -s other
+tmux -S "$other_socket" set -g @bonsai-state-dir "$(bonsai_state_dir)"
+other_ports=$(BONSAI_SOCKET="$other_socket" "$BONSAI_SCRIPTS/board.sh" --ports-dir)
+[ "$other_ports" != "$ports_dir" ]
+printf '1\n' > "$ports_dir/99999999"
+BONSAI_SOCKET="$other_socket" "$BONSAI_SCRIPTS/board.sh" --refresh
+[ -f "$ports_dir/99999999" ]
+tmux -S "$other_socket" kill-server
