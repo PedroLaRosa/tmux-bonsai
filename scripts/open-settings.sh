@@ -8,7 +8,7 @@ if [ -n "${SSH_CONNECTION:-}${SSH_TTY:-}" ]; then
 fi
 if [ "$(uname)" = Darwin ]; then
   backend=$(bonsai_backends); bundle=''
-  case "$backend" in *terminal-notifier*) bundle=fr.julienxx.terminal-notifier;; *osascript*) bundle=com.apple.ScriptEditor2;; esac
+  case "$backend" in *terminal-notifier*) bundle=fr.julienxx.oss.terminal-notifier;; *osascript*) bundle=com.apple.ScriptEditor2;; esac
   version=$(sw_vers -productVersion); major=${version%%.*}
   if [ "$major" -ge 13 ]; then open "x-apple.systempreferences:com.apple.Notifications-Settings.extension${bundle:+?id=$bundle}"
   elif [ "$major" -ge 12 ]; then open 'x-apple.systempreferences:com.apple.preference.notifications'
