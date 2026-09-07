@@ -26,11 +26,19 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/bonsai-list.XXXXXX") || exit 1
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 # Sanitize option controls before adding record separators.
 fmt='#{pane_id}'
-controls=$'\001-\037\177'
+# Enumerate bytes: control-character ranges depend on the tmux server locale
+# and libc regex collation. An explicit class behaves the same on BSD/glibc.
+controls=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177'
 for field in session_name session_id window_name window_id pane_index pane_current_path pane_pid pane_current_command @agent_type @agent_state @agent_state_ts @agent_updated_ts @agent_seen_ts @agent_prompt @agent_msg @agent_ask @agent_tool @agent_session @agent_children @agent_model @agent_ctx pane_dead @agent_hook_ts window_index @agent_launch_ts; do
   fmt="$fmt$us#{s|[$controls]| |:$field}"
 done
 tmx list-panes -a -F "$fmt" > "$tmp/panes" 2>/dev/null || :
+# A framing error must be visible; silently dropping a fragment hides agents.
+# Validate before indexing metadata maps so errors identify the broken snapshot.
+awk -F "$us" '
+ NF!=26 || $1!~/^%[0-9]+$/ {
+  printf "bonsai list: invalid pane snapshot at record %d (expected 26 fields; got %d)\n", NR, NF > "/dev/stderr"; exit 1
+ }' "$tmp/panes" || exit 1
 ps -eo pid=,ppid=,comm=,args='' > "$tmp/ps" 2>/dev/null || :
 awk -v FS="$us" '
  NR==FNR {panes[$8]=1; next}

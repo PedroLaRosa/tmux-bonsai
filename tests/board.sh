@@ -15,6 +15,29 @@ assert_jq "$json" ".[0].pane_id==\"$p1\" and .[1].pane_id==\"$p2\""
 assert_jq "$json" "any(.[]; .pane_id==\"$p3\" and .unseen and .state==\"done\")"
 assert_jq "$json" "all(.[]; .pane_id!=\"$shell_pane\")"
 assert_jq "$json" 'all(.[]; (.ask|contains("\u001f") or contains("\n"))|not)'
+# Every ASCII control byte is removed without eating Unicode or breaking the
+# record boundary, independent of the tmux server's regex collation.
+all_controls=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037\177'
+tmx set -p -t "$p1" @agent_ask "before${all_controls}café 🤖"
+assert_jq "$("$BONSAI_SCRIPTS/list.sh" --json)" "any(.[]; .pane_id==\"$p1\" and .ask==(\"before\"+(\" \"*32)+\"café 🤖\"))"
+# Simulate an incomplete tmux record. Fail with a framing diagnostic instead of
+# a jq null-index crash or a misleading empty/partial list of agents.
+command() {
+ if [ "${1:-}" = tmux ] && [ "${4:-}" = list-panes ]; then
+  printf '%%123\037fragment\n'; return 0
+ fi
+ builtin command "$@"
+}
+export -f command
+set +e
+"$BONSAI_SCRIPTS/list.sh" --json > "$TMP/broken-snapshot.json" 2> "$TMP/broken-snapshot.err"
+broken_status=$?
+set -e
+unset -f command
+assert_eq 1 "$broken_status" 'malformed snapshot rejected'
+assert_eq '' "$(cat "$TMP/broken-snapshot.json")" 'no misleading partial snapshot'
+assert_contains "$(cat "$TMP/broken-snapshot.err")" 'invalid pane snapshot at record 1'
+
 rows=$("$BONSAI_SCRIPTS/list.sh" --rows)
 assert_eq 8 "$(printf '%s\n' "$rows" | awk -F '\037' 'NR==1 {print NF}')" 'stable row fields'
 assert_eq '2 0 0 1 1 0 0 0' "$("$BONSAI_SCRIPTS/list.sh" --counts)" counts
