@@ -55,4 +55,4 @@ The collector uses one tmux snapshot, one process snapshot, and a cache per work
 
 Run `bash tests/manual/board-capture.sh` to reproduce the 30-pane collector benchmark, verify a live push refresh, and regenerate the terminal capture. Timings are printed for the current machine.
 
-A local macOS run with 30 mixed panes measured a 97 ms warm median collector refresh and a 123 ms visible push refresh. Cold collection took 117 ms; warm samples ranged up to 108 ms. These are observations, not timing guarantees; startup Git discovery and host process load affect the results.
+The final local macOS run with 30 mixed panes measured a 102 ms warm median collector refresh and a 291 ms visible push refresh. Cold collection took 135 ms; warm samples ranged up to 143 ms. This run exceeded the plan's 100 ms collector and 200 ms push targets. Earlier runs reached 97 ms and 123 ms, respectively; startup Git discovery and host process load affect the results. See [validation and limits](notifications-validation.md).

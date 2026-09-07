@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Status** | Proposal. Implement in a follow-up session, phase by phase (see §7). |
+| **Status** | P0–P5 implemented. See [validation, measurements and manual checks](notifications-validation.md). |
 | **Scope** | Fold agent notifications back into tmux-bonsai as a first-class *Notifications* section, add a live *Agent board* (dashboard) that can run in a popup, a window, or a side pane, and add the multi-agent primitives (jump / reply / wait / send / spawn) a tmux user needs to run many agents at once. |
 | **Quality bar** | [stablyai/orca](https://github.com/stablyai/orca) `da48ad2` (its notification pipeline, agent-status model, Agent Dashboard and Agents feed). Everything Orca does for notifications and agent tracking has a tmux-native equivalent here, plus the things only a terminal multiplexer can do well (see §3). |
-| **Targets** | tmux ≥ 3.2 (popups); tmux ≥ 3.3 unlocks popup titles/borders and `allow-passthrough`; verified on 3.4. bash 3.2 (macOS stock) — no associative arrays, no `mapfile`. `jq`, `fzf ≥ 0.38`, `curl` for the board's push refresh. |
+| **Targets** | tmux ≥ 3.2 (popups); tmux ≥ 3.3 unlocks popup titles/borders and `allow-passthrough`; verified on 3.4. bash 3.2 (macOS stock) — no associative arrays, no `mapfile`. `jq`, `fzf ≥ 0.38` (manual refresh); fzf ≥ 0.40 and `curl` for live refresh with dynamic headers. |
 | **Supersedes** | The companion plugin `tmux-agent-notify` (extracted in #19). Its `@agent_state` / `@agent_state_ts` pane options stay backward compatible; everything else is redesigned here. (The companion repo was not reachable from the planning session; the design below is based on the #19 commit description and Orca, not on its current code.) |
 
 ## Table of contents
@@ -363,11 +363,11 @@ Sections are implied by sort order and colour (fzf has no real sections; an opti
 | `?` | help popup |
 | `Esc` | popup: back to menu · watch: quit |
 
-**Refresh.** Push + timer, never polling-only when fzf ≥ 0.36:
+**Refresh.** Push + timer, never polling-only when fzf ≥ 0.40:
 - fzf starts with `--listen 0`; the `start` event runs `bonsai board --register $FZF_PORT` which writes `state/board-ports/<pid>`; a ticker (`sleep @bonsai-board-refresh`, default 2 s) posts `reload(bonsai list --rows)+refresh-preview` so ages and previews stay live;
 - the reducer posts the same to every registered port after each accepted event (instant); dead ports are pruned on failure;
 - `--track` keeps the cursor on the same agent across reloads; `--ansi --delimiter $'\x1f' --with-nth 3.. --nth 4..7` hide the ids and search only the visible text.
-- fzf < 0.36: `ctrl-r` reload and a header hint (documented in the doctor).
+- fzf < 0.40: `ctrl-r` reload and a header hint (documented in the doctor).
 
 **Performance budget:** `bonsai list --rows` ≤ 60 ms for 40 panes: one `tmux list-panes -a -F` (all formats + pane options in one call), one `ps` snapshot, `git symbolic-ref` per unique cwd (cached in `state/cache/branch-<hash>` keyed on `.git/HEAD` mtime).
 
@@ -465,7 +465,7 @@ Notifications submenu (`notify-menu.sh`; every label is a tmux format, so toggle
 
 **Setup wizard** (`notify-setup.sh`, popup, also `bonsai hooks install`): (1) detect agent CLIs on `PATH` and show `agent | cli | hooks: installed / partial / not installed / drifted`; (2) select which to wire (all detected pre-selected); (3) write configs with backups and show what changed (paths, event names); (4) offer tmux prerequisites: `focus-events on`, `allow-passthrough all` (written to `settings.tmux`, not to `.tmux.conf`, unless the user says so); (5) send the test notification and run the *did you see it?* flow; (6) `[any key] → back to menu`. Re-running is safe (idempotent). Nothing is modified without the user's confirmation on step 2.
 
-**Doctor** (`doctor.sh`, read-only): tmux version and feature gates (3.2 popup / 3.3 title, border, passthrough / 3.4 tested), `focus-events`, `allow-passthrough`, `jq`, `fzf` version (0.36 listen / 0.38 track+become), `curl`, `git`, `wt`; detected terminal (`#{client_termtype}` → `show-environment -g TERM_PROGRAM` → `@bonsai-terminal`), focus reporting observed (focused-clients file non-empty?), backend availability and versions (libnotify ≥ 0.7.10 for actions/replace), notification daemon (`GetServerInformation`), DND probes (macOS `~/Library/DoNotDisturb/DB/Assertions.json`, `dunstctl is-paused`, `gsettings … show-banners`, `makoctl mode`), per-agent hook status, last test evidence, events log size, PATH inside the tmux server (`/opt/homebrew/bin` missing is the classic terminal-notifier failure). Output is a table with `✓ / ⚠ / ✗` and a one-line fix per `⚠/✗`.
+**Doctor** (`doctor.sh`, read-only): tmux version and feature gates (3.2 popup / 3.3 title, border, passthrough / 3.4 tested), `focus-events`, `allow-passthrough`, `jq`, `fzf` version (0.36 listen / 0.38 become / 0.39 track / 0.40 dynamic headers), `curl`, `git`, `wt`; detected terminal (`#{client_termtype}` → `show-environment -g TERM_PROGRAM` → `@bonsai-terminal`), focus reporting observed (focused-clients file non-empty?), backend availability and versions (libnotify ≥ 0.7.10 for actions/replace), notification daemon (`GetServerInformation`), DND probes (macOS `~/Library/DoNotDisturb/DB/Assertions.json`, `dunstctl is-paused`, `gsettings … show-banners`, `makoctl mode`), per-agent hook status, last test evidence, events log size, PATH inside the tmux server (`/opt/homebrew/bin` missing is the classic terminal-notifier failure). Output is a table with `✓ / ⚠ / ✗` and a one-line fix per `⚠/✗`.
 
 **First run:** when no `settings.tmux` exists, `bonsai.tmux` shows `display-message "bonsai: prefix+W → Notifications → setup to enable agent alerts"` once (`state/first-run-shown`). No config file is ever touched automatically.
 
@@ -634,7 +634,7 @@ Each phase is a PR that leaves `main` usable. Definition of done includes tests 
 - **Socket**: always derive from `$TMUX` (`${TMUX%%,*}`); scripts started by tmux itself may run without `$TMUX_PANE` — take the pane from `#{pane_id}` arguments instead.
 - **Hook scope**: `set-hook -g pane-*` hooks are window hooks in tmux 3.4 (`show-hooks -gw`); use `-g` to set, `-gw` to inspect; append with `-a` and de-duplicate on reload.
 - **Formats as code**: the title classifier and menu labels are tmux formats; keep them in one place (`_lib.sh` emits them) and test them with `display-message -p`.
-- **Feature gates**: `display-popup -T/-b/-s/-S` need 3.3 (`tmux_at_least 3.3`), `allow-passthrough` 3.3, `m/r:` regex 3.1, `#[range=user|…]` 3.2, fzf `--listen` 0.36 / `--track` 0.38. Degrade, never fail.
+- **Feature gates**: `display-popup -T/-b/-s/-S` need 3.3 (`tmux_at_least 3.3`), `allow-passthrough` 3.3, `m/r:` regex 3.1, `#[range=user|…]` 3.2, fzf `--listen` 0.36 / `--track` and automatic listen ports 0.39 / dynamic headers 0.40. Degrade, never fail.
 - **Emoji width**: default glyph set is single-width unicode; emoji is opt-in.
 - **Concurrency**: subagent bursts fire hooks in parallel; the reducer serialises per pane with the lock and rejects `seq` regressions.
 - **Privacy**: `@bonsai-notify-preview off` keeps prompts and answers out of OS banners; the events log is `0600`.
@@ -832,7 +832,7 @@ tmux 3.4, headless server (`tmux -L bt`), this container:
 - `#{m/r:(⠋|⠙|◐|◓|✦),⠋ Claude Code}` → `1`; `#{m/r:(✳|◇|✋),✳ Claude Code}` → `1`; `#{m/ri:(ready|idle|done),Codex Ready}` → `1` (multibyte alternations work in `m/r:`).
 - `$TMUX` inside a pane is `<socket_path>,<server_pid>,<session_index>`; `$TMUX_PANE` is `%N`.
 - `display-popup` accepts `-T title -b border-lines -s style -S border-style -w 80% -h 80% -E` (3.3+ options); `display-menu` accepts `-T -x C -y C -O` and item names are formats; `allow-passthrough on|all` exists; `wait-for`/`wait-for -S` work; `#[range=user|X]` / `mouse_status_range` / `MouseDown1Status` are documented for clickable status ranges.
-- fzf: `--listen` (0.36), `--track` and `become` (0.38) — from fzf's changelog; the doctor gates on `fzf --version`.
+- fzf (version claims corrected during implementation): `--listen` (0.36), `become` (0.38), `--track` and automatic listen ports (0.39), dynamic headers (0.40). The doctor gates on `fzf --version`.
 
 Claude Code hooks (official docs, checked 2026-09-06 by the planning session): event list, `Notification` `notification_type` values (`permission_prompt` ≈ 6 s after a prompt appears, `idle_prompt` 60 s after the last response, `auth_success`, `elicitation_dialog`, `elicitation_url_dialog`, `elicitation_complete`, `elicitation_response`, `agent_needs_input`, `agent_completed`, `quota_auto_resume_*`), stdin fields per event (A.1), matcher semantics (regex, `|`, `*`, empty = all; no matcher for `UserPromptSubmit`/`Stop`), `timeout` per command hook, live pickup of settings changes, `preferredNotifChannel` (`terminal_bell`, `notifications_disabled`), `statusLine` JSON (`model.display_name`, `context_window.used_percentage`, `cost`, `rate_limits`, `session_id`). `is_interrupt` on `Stop` is not in the docs but is read by Orca — treat as optional.
 
