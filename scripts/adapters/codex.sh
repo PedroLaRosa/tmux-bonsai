@@ -2,6 +2,7 @@
 # A bounded, top-level TOML assignment. Existing user notify commands win.
 agent=codex; cli=codex; shape=toml
 config=${CODEX_HOME:-$HOME/.codex}/config.toml
+# shellcheck source=_common.sh
 . "${BASH_SOURCE[0]%/*}/_common.sh"
 adapter_args "$@"
 if [ "$action" = explain ]; then

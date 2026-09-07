@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 agent=opencode; cli=opencode; shape=plugin
 config=${XDG_CONFIG_HOME:-$HOME/.config}/opencode/plugins/tmux-bonsai.js
+# shellcheck source=_common.sh
 . "${BASH_SOURCE[0]%/*}/_common.sh"
 adapter_args "$@"
 if [ "$action" = explain ]; then

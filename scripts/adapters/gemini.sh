@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 agent=gemini; cli=gemini; shape=gemini
 config=$HOME/.gemini/settings.json
+# shellcheck source=_common.sh
 . "${BASH_SOURCE[0]%/*}/_common.sh"
 adapter_args "$@"
 events='BeforeAgent AfterAgent'

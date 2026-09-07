@@ -1,23 +1,31 @@
 #!/usr/bin/env bash
 # Shared installer plumbing. Hook execution never sources this file.
+# Provider entry points set agent, cli, shape, config and events before calling
+# these functions. They are intentionally external inputs to this sourced file.
+# shellcheck disable=SC2154
 set -e
 ADAPTER_DIR=$(cd "${BASH_SOURCE[0]%/*}" && pwd -P)
+# shellcheck source=../_lib.sh
 . "$ADAPTER_DIR/../_lib.sh"
 ADAPTER_SCRIPTS=$(cd "$ADAPTER_DIR/.." && pwd -P)
 adapter_record() { printf '%s\t%s\t%s\t%s\n' "$agent" "$1" "$config" "$2"; }
 adapter_error() { adapter_record error "$*"; exit 1; }
 adapter_args() {
     action=${1:-status}; [ "$#" -eq 0 ] || shift
-    force=0; tools_mode=${BONSAI_HOOKS_TOOL_EVENTS:-}
+    force=0; terminal_bell=0; tools_mode=${BONSAI_HOOKS_TOOL_EVENTS:-}
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --force) force=1 ;;
+            --terminal-bell) terminal_bell=1 ;;
             --tools) shift; tools_mode=${1:-} ;;
             *) adapter_error "unknown option: $1" ;;
         esac
         shift
     done
     case "$action" in install|status|remove|explain) ;; *) adapter_error 'expected install|status|remove|explain' ;; esac
+    if [ "$terminal_bell" = 1 ] && { [ "$agent" != claude ] || [ "$action" != install ]; }; then
+        adapter_error '--terminal-bell is supported by claude install only'
+    fi
     if [ -z "$tools_mode" ]; then
         tools_mode=$(bonsai_opt @bonsai-hooks-tool-events on 2>/dev/null) || tools_mode=on
     fi
@@ -82,6 +90,10 @@ adapter_json() {
             [ "$action" != remove ] || [ -f "$config" ] || { adapter_record not_installed 'no config'; return; }
             adapter_lock
             adapter_json_input | jq --arg action "$action" --arg agent "$agent" --arg command "$quoted" --arg events "$events" --arg shape "$shape" -f "$ADAPTER_DIR/_json.jq" > "$temp" || adapter_error 'cannot merge hooks; config left unchanged'
+            if [ "$terminal_bell" = 1 ]; then
+                current=$(jq '.preferredNotifChannel = "terminal_bell"' "$temp")
+                printf '%s\n' "$current" > "$temp"
+            fi
             if [ "$shape" = droid ]; then
                 current=$(jq '.hooks // {}' "$temp")
                 printf '%s\n' "$current" > "$temp"

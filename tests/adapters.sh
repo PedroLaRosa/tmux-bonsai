@@ -38,6 +38,8 @@ cp "$TMP/drifted" "$BONSAI_ADAPTER_CONFIG"
 assert_contains "$("$ADAPTERS/claude.sh" status)" partial
 "$ADAPTERS/claude.sh" install --force >/dev/null
 assert_contains "$("$ADAPTERS/claude.sh" status)" installed
+"$ADAPTERS/claude.sh" install --force --terminal-bell >/dev/null
+assert_jq "$(cat "$BONSAI_ADAPTER_CONFIG")" '.preferredNotifChannel == "terminal_bell"'
 printf 'not json' > "$BONSAI_ADAPTER_CONFIG"
 if "$ADAPTERS/claude.sh" install --force >/dev/null 2>&1; then exit 1; fi
 assert_eq 'not json' "$(cat "$BONSAI_ADAPTER_CONFIG")" 'malformed input preserved'
@@ -93,8 +95,10 @@ if command -v node >/dev/null 2>&1; then
     mkdir -p "$BONSAI_PLUGIN_TEST_DIR"
     cat > "$BONSAI_PLUGIN_TEST_DIR/hook" <<'SH'
 #!/usr/bin/env bash
-cat >> "$BONSAI_PLUGIN_TEST_DIR/events.jsonl"
-printf '\n' >> "$BONSAI_PLUGIN_TEST_DIR/events.jsonl"
+payload=$(cat)
+file="$BONSAI_PLUGIN_TEST_DIR/$BONSAI_EVENT_SEQ"
+printf '%s\n' "$payload" > "$file.tmp"
+mv "$file.tmp" "$file.json"
 SH
     chmod +x "$BONSAI_PLUGIN_TEST_DIR/hook"
     node --input-type=module <<'JS'
@@ -109,11 +113,17 @@ const moduleFile = path.join(dir, 'plugin.mjs');
 fs.writeFileSync(moduleFile, source);
 process.env.TMUX_PANE = '%99';
 const { TmuxBonsaiPlugin } = await import(pathToFileURL(moduleFile));
+// Keep preview throttling deterministic even when the OS schedules children
+// slowly. File readiness below uses the independent monotonic clock.
+let now = Date.now();
+Date.now = () => now;
 const plugin = await TmuxBonsaiPlugin(undefined);
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const dispatch = async (type, properties) => {
+  now += 10;
   plugin.event({event: {type, properties}});
-  await pause(60);
+  // Drain the handler's promise continuations without assuming child latency.
+  await new Promise(resolve => setImmediate(resolve));
 };
 await dispatch('session.created', {info: {id: 'root'}});
 await dispatch('session.created', {info: {id: 'child', parentID: 'root'}});
@@ -123,7 +133,19 @@ await dispatch('message.part.updated', {part: {sessionID: 'root', messageID: 'ms
 await dispatch('session.status', {sessionID: 'child', status: {type: 'busy'}});
 await dispatch('session.status', {sessionID: 'child', status: {type: 'idle'}});
 await dispatch('session.status', {sessionID: 'root', status: {type: 'idle'}});
-const lines = fs.readFileSync(path.join(dir, 'events.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+const expected = 5; // root creation, one preview, child start/stop, root idle
+const deadline = performance.now() + 5000;
+let files = [];
+do {
+  files = fs.readdirSync(dir).filter(file => /^\d+\.json$/.test(file));
+  if (files.length >= expected) break;
+  await pause(20);
+} while (performance.now() < deadline);
+assert.equal(files.length, expected, `OpenCode hook output timed out: ${files.length}/${expected} complete events`);
+// Each collector atomically publishes a file; physical child completion order
+// may differ from source order and must not affect assertions.
+const lines = files.map(file => JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')))
+  .sort((a, b) => a.bonsai_seq - b.bonsai_seq);
 assert.equal(lines.filter(e => e.type === 'session.created').length, 1);
 assert.equal(lines.filter(e => e.type === 'message.part.updated').length, 1);
 assert.ok(lines.some(e => e.type === 'SubagentStart' && e.agent_id === 'child'));
@@ -137,24 +159,47 @@ fi
 "$ADAPTERS/opencode.sh" remove >/dev/null
 [ ! -f "$BONSAI_ADAPTER_CONFIG" ]
 
-# A reducer deliberately keeps running after the hook returns. Capturing the
-# hook's stdout catches inherited pipe descriptors that would stall the agent.
+# The reducer waits for an explicit release. The hook's captured output must
+# close first; this proves detachment without a wall-clock latency assertion.
 mkdir -p "$TMP/fixture/scripts/hooks"
 cp "$TEST_ROOT"/scripts/hooks/*.sh "$TMP/fixture/scripts/hooks/"
 cat > "$TMP/fixture/scripts/agent-event.sh" <<'SH'
 #!/usr/bin/env bash
 payload=$(cat)
-sleep 2
+touch "$BONSAI_FAKE_OUTPUT.ready"
+attempt=0
+while [ ! -f "$BONSAI_FAKE_OUTPUT.release" ] && [ "$attempt" -lt 500 ]; do
+    sleep 0.02
+    attempt=$((attempt+1))
+done
 printf '%s\n%s\n%s\n' "$1" "$2" "$payload" > "$BONSAI_FAKE_OUTPUT"
 SH
 chmod +x "$TMP/fixture/scripts/agent-event.sh"
 export BONSAI_FAKE_OUTPUT="$TMP/dispatched"
 export TMUX_PANE='%99'
-started=$SECONDS
-output=$(printf '{"prompt":"literal $(echo untouched)"}' | "$TMP/fixture/scripts/hooks/hook-claude.sh" UserPromptSubmit)
-elapsed=$((SECONDS-started))
-[ "$elapsed" -lt 2 ] || { printf 'hook retained agent pipe descriptors\n' >&2; exit 1; }
+trap 'touch "$BONSAI_FAKE_OUTPUT.release"' EXIT
+await_file() {
+    local file=$1 attempt=0
+    while [ ! -f "$file" ] && [ "$attempt" -lt 250 ]; do
+        sleep 0.02
+        attempt=$((attempt+1))
+    done
+    [ -f "$file" ] || { printf 'Timed out waiting for %s\n' "$file" >&2; exit 1; }
+}
+(
+    output=$(printf '{"prompt":"literal $(echo untouched)"}' | "$TMP/fixture/scripts/hooks/hook-claude.sh" UserPromptSubmit)
+    printf '%s' "$output" > "$TMP/hook-output"
+    touch "$TMP/hook-finished"
+) & hook_test_pid=$!
+await_file "$BONSAI_FAKE_OUTPUT.ready"
+await_file "$TMP/hook-finished"
+wait "$hook_test_pid"
+output=$(cat "$TMP/hook-output")
 assert_eq '' "$output" 'Claude hook stdout'
+touch "$BONSAI_FAKE_OUTPUT.release"
+await_file "$BONSAI_FAKE_OUTPUT"
+assert_contains "$(cat "$BONSAI_FAKE_OUTPUT")" 'literal $(echo untouched)'
+trap - EXIT
 assert_eq '{"continue":true}' "$(printf '{}' | "$TMP/fixture/scripts/hooks/hook-cursor.sh" beforeSubmitPrompt)"
 assert_eq '{}' "$(printf '{}' | "$TMP/fixture/scripts/hooks/hook-cursor.sh" beforeShellExecution)"
 unset TMUX_PANE

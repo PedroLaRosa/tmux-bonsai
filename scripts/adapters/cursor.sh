@@ -2,6 +2,7 @@
 agent=cursor; cli=agent; shape=cursor
 command -v cursor-agent >/dev/null 2>&1 && cli=cursor-agent
 config=$HOME/.cursor/hooks.json
+# shellcheck source=_common.sh
 . "${BASH_SOURCE[0]%/*}/_common.sh"
 adapter_args "$@"
 events='beforeSubmitPrompt stop afterAgentResponse'

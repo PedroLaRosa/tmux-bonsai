@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 agent=codex; cli=codex; shape=claude
 config=${CODEX_HOME:-$HOME/.codex}/hooks.json
+# shellcheck source=_common.sh
 . "${BASH_SOURCE[0]%/*}/_common.sh"
 adapter_args "$@"
 events='SessionStart SessionEnd UserPromptSubmit PermissionRequest Stop Interrupt SubagentStart SubagentStop PostCompact'

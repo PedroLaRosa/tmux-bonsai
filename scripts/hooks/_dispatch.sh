@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 # Sourced by the tiny provider entry points. Never parse JSON in the foreground.
+# The entry point supplies bonsai_agent before sourcing this library.
+# shellcheck disable=SC2154
 case "${TMUX_PANE:-}" in %*) ;; *) exit 0 ;; esac
 [ "$bonsai_agent" != claude ] || [ -z "${CLAUDE_JOB_DIR:-}" ] || exit 0
 if [ "${bonsai_payload_set:-}" != 1 ]; then
     IFS= read -r -d '' bonsai_payload || :
 fi
 # Capture source order before detaching; the reducer still works without Perl.
-if [ -z "${BONSAI_EVENT_SEQ:-}" ] && command -v perl >/dev/null 2>&1; then
-    BONSAI_EVENT_SEQ=$(perl -MTime::HiRes=time -e 'printf "%.0f", time()*1000000' 2>/dev/null)
+if [ -z "${BONSAI_EVENT_SEQ:-}" ]; then
+    if [ -n "${EPOCHREALTIME:-}" ]; then
+        BONSAI_EVENT_SEQ=${EPOCHREALTIME/./}
+    elif command -v perl >/dev/null 2>&1; then
+        BONSAI_EVENT_SEQ=$(perl -e 'require Time::HiRes; printf "%.0f", Time::HiRes::time()*1000000' 2>/dev/null)
+    fi
     export BONSAI_EVENT_SEQ
 fi
 (

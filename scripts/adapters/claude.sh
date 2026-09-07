@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 agent=claude; cli=claude; shape=claude
 config=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json
+# shellcheck source=_common.sh
 . "${BASH_SOURCE[0]%/*}/_common.sh"
 adapter_args "$@"
 events='SessionStart UserPromptSubmit PermissionRequest Notification Stop StopFailure SubagentStart SubagentStop PostCompact SessionEnd'

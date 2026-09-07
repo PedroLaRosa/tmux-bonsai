@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 agent=copilot; cli=copilot; shape=copilot
 config=${COPILOT_HOME:-$HOME/.copilot}/hooks/tmux-bonsai.json
+# shellcheck source=_common.sh
 . "${BASH_SOURCE[0]%/*}/_common.sh"
 adapter_args "$@"
 events='SessionStart SessionEnd UserPromptSubmit PermissionRequest Stop ErrorOccurred SubagentStart SubagentStop'

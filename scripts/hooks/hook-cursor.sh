@@ -6,4 +6,5 @@ case "$bonsai_event" in
     beforeSubmitPrompt) printf '{"continue":true}\n' ;;
     *) printf '{}\n' ;;
 esac
+# shellcheck source=_dispatch.sh
 . "${BASH_SOURCE[0]%/*}/_dispatch.sh"

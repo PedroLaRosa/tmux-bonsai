@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 agent=droid; cli=droid; shape=droid
 config=$HOME/.factory/hooks.json
+# shellcheck source=_common.sh
 . "${BASH_SOURCE[0]%/*}/_common.sh"
 adapter_args "$@"
 events='SessionStart SessionEnd UserPromptSubmit Stop SubagentStop Notification'

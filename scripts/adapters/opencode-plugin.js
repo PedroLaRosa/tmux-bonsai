@@ -120,8 +120,8 @@ export const TmuxBonsaiPlugin = async (ctx) => {
     void (async () => {
       const root = await rootOf(input.sessionID);
       if (!root || root !== input.sessionID) return;
-      emit({ type, properties: { sessionID: root } }, root,
-        { tool_name: input.tool, tool_input: output?.args || input.args || {} });
+      emit({ type, properties: { sessionID: root, tool_name: input.tool,
+        tool_input: output?.args || input.args || {} } }, root);
     })().catch(() => {});
   };
   return {
