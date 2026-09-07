@@ -24,3 +24,6 @@ tmx set -g @bonsai-notify-grace 0.7
 "$BONSAI_SCRIPTS/settings.sh" init
 assert_eq 0.7 "$(bonsai_opt @bonsai-notify-grace)" 'new direct config wins over persisted value'
 assert_contains "$(bonsai_opt @bonsai-pinned)" '@bonsai-notify-grace'
+"$BONSAI_SCRIPTS/settings.sh" set sound-input ''
+"$BONSAI_SCRIPTS/settings.sh" init
+assert_eq '' "$(bonsai_opt @bonsai-sound-input)" 'muted category survives reload'

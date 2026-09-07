@@ -113,9 +113,11 @@ case "${1:-list}" in
       tmx source-file "$tmp"; rm -f "$tmp"
     fi
     while IFS='|' read -r key value; do
-      current=$(tmx show-option -gqv "@bonsai-$key")
-      [ -n "$current" ] || tmx set -g "@bonsai-$key" "$value"
-      remember "@bonsai-$key" "${current:-$value}"
+      if ! current=$(tmx show-option -gv "@bonsai-$key" 2>/dev/null); then
+        current=$value
+        tmx set -g "@bonsai-$key" "$current"
+      fi
+      remember "@bonsai-$key" "$current"
     done < <(defaults)
     ;;
   list)
